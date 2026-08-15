@@ -71,8 +71,18 @@ Ver `.env.example`. En Railway con el plugin de MySQL conectado, `MYSQLHOST/MYSQ
 2. Agregar el plugin de MySQL (Railway inyecta `MYSQLHOST`/`MYSQLUSER`/etc. automáticamente al servicio).
 3. En la pestaña Variables del servicio backend, agregar `JWT_SECRET` y, más adelante, `MP_ACCESS_TOKEN`.
 4. Activar el dominio público en Settings → Networking, y setear `APP_BASE_URL` con esa URL.
-5. Correr el schema una vez: `railway run npm run migrate` (o conectarse con un cliente MySQL y correr `schema.sql` directo).
-6. Opcional, para probar el flujo de punta a punta: `railway run npm run seed` — crea un admin, el proveedor PROTEGE+ con 3 productos, y una organización demo ya aprobada (`colegio-los-andes`). Las credenciales quedan en el log del comando (o se configuran antes con `SEED_ADMIN_PASSWORD` / `SEED_ORG_PASSWORD`).
+5. El schema se aplica solo al arrancar el server (`server.js` corre `schema.sql` en el boot, sin romper el arranque si falla — queda logueado). Para el primer deploy contra una base vacía no hace falta hacer nada más.
+
+### Cargar el seed de prueba (PROTEGE+ + organización demo) sin terminal
+
+Si tenés Railway CLI a mano: `railway run npm run migrate` y `railway run npm run seed`.
+
+Si no (por ejemplo, trabajando desde una tablet), usá las rutas de bootstrap:
+
+1. En Variables del servicio, agregá `BOOTSTRAP_TOKEN` con cualquier string secreto y volvé a desplegar.
+2. Desde el navegador, visitá `https://tu-servicio.up.railway.app/api/bootstrap/migrate?token=EL_TOKEN` (por si el auto-migrate del boot no llegó a correr) y después `https://tu-servicio.up.railway.app/api/bootstrap/seed?token=EL_TOKEN`.
+3. La respuesta del `/seed` trae el email/password del admin y de la organización demo (o confirma que ya existían). Ambas rutas son idempotentes: se pueden visitar más de una vez sin duplicar nada.
+4. Una vez cargado, quitá o cambiá `BOOTSTRAP_TOKEN` — sin esa variable configurada, ambas rutas responden 404.
 
 ## Flujo de prueba end-to-end (con el seed cargado)
 
