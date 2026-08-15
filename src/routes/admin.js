@@ -133,15 +133,15 @@ router.get('/proveedores', async (req, res) => {
 
 router.post('/proveedores', async (req, res) => {
   try {
-    const { nombre, razon_social, rut, email_contacto, telefono_contacto, datos_bancarios, gestiona_despacho } = req.body;
+    const { nombre, razon_social, rut, email_contacto, telefono_contacto, logo_url, datos_bancarios, gestiona_despacho } = req.body;
     if (!nombre) return res.status(400).json({ error: 'nombre es requerido' });
 
     const [result] = await db.query(
-      `INSERT INTO proveedores (nombre, razon_social, rut, email_contacto, telefono_contacto, datos_bancarios, gestiona_despacho)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO proveedores (nombre, razon_social, rut, email_contacto, telefono_contacto, logo_url, datos_bancarios, gestiona_despacho)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         nombre, razon_social || null, rut || null, email_contacto || null, telefono_contacto || null,
-        JSON.stringify(datos_bancarios || null), gestiona_despacho ?? true
+        logo_url || null, JSON.stringify(datos_bancarios || null), gestiona_despacho ?? true
       ]
     );
     res.status(201).json({ id: result.insertId });
@@ -153,7 +153,7 @@ router.post('/proveedores', async (req, res) => {
 
 router.put('/proveedores/:id', async (req, res) => {
   try {
-    const { nombre, razon_social, rut, email_contacto, telefono_contacto, datos_bancarios, gestiona_despacho, estado } = req.body;
+    const { nombre, razon_social, rut, email_contacto, telefono_contacto, logo_url, datos_bancarios, gestiona_despacho, estado } = req.body;
     const [result] = await db.query(
       `UPDATE proveedores SET
          nombre = COALESCE(?, nombre),
@@ -161,13 +161,14 @@ router.put('/proveedores/:id', async (req, res) => {
          rut = COALESCE(?, rut),
          email_contacto = COALESCE(?, email_contacto),
          telefono_contacto = COALESCE(?, telefono_contacto),
+         logo_url = COALESCE(?, logo_url),
          datos_bancarios = COALESCE(?, datos_bancarios),
          gestiona_despacho = COALESCE(?, gestiona_despacho),
          estado = COALESCE(?, estado)
        WHERE id = ?`,
       [
         nombre || null, razon_social || null, rut || null, email_contacto || null, telefono_contacto || null,
-        datos_bancarios ? JSON.stringify(datos_bancarios) : null, gestiona_despacho, estado || null, req.params.id
+        logo_url || null, datos_bancarios ? JSON.stringify(datos_bancarios) : null, gestiona_despacho, estado || null, req.params.id
       ]
     );
     if (!result.affectedRows) return res.status(404).json({ error: 'Proveedor no encontrado' });
@@ -228,16 +229,24 @@ router.post('/categorias', async (req, res) => {
 // PRODUCTOS (CRUD) — Huayca define precio_proveedor / comisiones, no la organización
 // -------------------------------------------------
 
-// GET /api/admin/productos - incluye todos los estados (borrador, agotado, pausado, activo)
+// GET /api/admin/productos?proveedor_id=X - incluye todos los estados (borrador, agotado, pausado, activo)
 router.get('/productos', async (req, res) => {
   try {
-    const [rows] = await db.query(
-      `SELECT p.*, pr.nombre AS proveedor_nombre, c.nombre AS categoria_nombre
-       FROM productos p
-       JOIN proveedores pr ON pr.id = p.proveedor_id
-       LEFT JOIN categorias c ON c.id = p.categoria_id
-       ORDER BY p.created_at DESC`
-    );
+    const { proveedor_id } = req.query;
+    let query = `
+      SELECT p.*, pr.nombre AS proveedor_nombre, c.nombre AS categoria_nombre
+      FROM productos p
+      JOIN proveedores pr ON pr.id = p.proveedor_id
+      LEFT JOIN categorias c ON c.id = p.categoria_id
+    `;
+    const params = [];
+    if (proveedor_id) {
+      query += ' WHERE p.proveedor_id = ?';
+      params.push(proveedor_id);
+    }
+    query += ' ORDER BY p.created_at DESC';
+
+    const [rows] = await db.query(query, params);
     res.json(rows);
   } catch (err) {
     console.error(err);

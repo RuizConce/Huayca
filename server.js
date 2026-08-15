@@ -16,6 +16,11 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Panel de administración estático (HTML/JS puro, sin build step):
+// queda disponible en /admin.html, sirviéndose desde el mismo dominio que
+// la API para no tener que lidiar con CORS.
+app.use(express.static('public'));
+
 app.get('/', (req, res) => {
   res.json({ ok: true, servicio: 'Huayca API', version: '1.0.0' });
 });

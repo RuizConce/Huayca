@@ -20,7 +20,12 @@ src/routes/tickets.js          → devoluciones/garantías
 src/routes/admin.js            → login admin, aprobar/rechazar organizaciones, CRUD proveedores/productos/categorías
 scripts/migrate.js             → corre schema.sql contra la base conectada
 scripts/seed.js                → carga admin + proveedor PROTEGE+ + productos + organización demo
+public/admin.html              → panel de administración (HTML/JS puro, sin build), servido como estático
 ```
+
+## Panel de administración
+
+`public/admin.html` es un panel liviano (login, gestión de marcas/proveedores con logo, y sus productos con precio/comisiones) servido directo por Express en `/admin.html` — vive en el mismo dominio que la API, así que no hay problemas de CORS y usa `localStorage` para el token del admin. Consume `POST /api/admin/login`, `GET/POST /api/admin/proveedores` y `GET/POST/PUT /api/admin/productos` (con filtro `?proveedor_id=`).
 
 ## Cómo se reparte la comisión (lo importante)
 

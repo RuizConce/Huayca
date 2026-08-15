@@ -16,6 +16,7 @@ CREATE TABLE proveedores (
   email_contacto VARCHAR(150),
   telefono_contacto VARCHAR(30),
   datos_bancarios JSON, -- {banco, tipo_cuenta, numero, titular, rut}
+  logo_url VARCHAR(500),
   gestiona_despacho BOOLEAN DEFAULT TRUE,
   estado ENUM('activo','inactivo') DEFAULT 'activo',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

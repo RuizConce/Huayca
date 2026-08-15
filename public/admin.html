@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Huayca — Panel de Administración</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, 'Segoe UI', sans-serif; margin: 0; background: #f4f5f2; color: #1a1a1a; }
+  header { background: #0d2b4e; color: white; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; }
+  header h1 { font-size: 18px; margin: 0; }
+  header button { background: transparent; border: 1px solid #ffffff55; color: white; padding: 6px 12px; border-radius: 6px; font-size: 13px; }
+  main { max-width: 900px; margin: 0 auto; padding: 20px; }
+  .hidden { display: none !important; }
+
+  /* Login */
+  #loginBox { max-width: 360px; margin: 60px auto; background: white; padding: 24px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+  #loginBox h2 { margin-top: 0; color: #0d2b4e; font-size: 18px; }
+  #loginBox input { width: 100%; padding: 10px; margin-top: 6px; margin-bottom: 14px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
+  #loginBox button { width: 100%; background: #e8801e; color: white; border: none; padding: 12px; border-radius: 6px; font-size: 15px; font-weight: 600; }
+  #loginError { color: #c0392b; font-size: 13px; margin-top: 8px; }
+
+  /* Marcas grid */
+  .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .toolbar h2 { color: #0d2b4e; font-size: 20px; margin: 0; }
+  .btn-primary { background: #e8801e; color: white; border: none; padding: 10px 18px; border-radius: 6px; font-size: 14px; font-weight: 600; }
+  .btn-secondary { background: white; color: #0d2b4e; border: 1px solid #ccc; padding: 8px 14px; border-radius: 6px; font-size: 13px; }
+  .btn-danger { background: #fdf1f0; color: #c0392b; border: 1px solid #f5c6c1; padding: 6px 10px; border-radius: 6px; font-size: 12px; }
+
+  .marcas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+  .marca-card { background: white; border-radius: 10px; padding: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); cursor: pointer; }
+  .marca-card:active { opacity: 0.85; }
+  .marca-logo { width: 100%; height: 90px; object-fit: contain; background: #f4f5f2; border-radius: 6px; margin-bottom: 10px; }
+  .marca-logo-placeholder { width: 100%; height: 90px; background: #eef1f6; border-radius: 6px; margin-bottom: 10px; display:flex; align-items:center; justify-content:center; color:#9aa5b5; font-size:12px; }
+  .marca-card h3 { font-size: 15px; margin: 0 0 4px; color: #0d2b4e; }
+  .marca-card p { font-size: 12px; color: #888; margin: 0; }
+
+  /* Detalle marca */
+  #vistaMarca .back-link { color: #0d2b4e; font-size: 13px; margin-bottom: 12px; display: inline-block; }
+  .productos-list { display: flex; flex-direction: column; gap: 10px; }
+  .producto-row { background: white; border-radius: 8px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .producto-info h4 { margin: 0 0 4px; font-size: 14px; color: #1a1a1a; }
+  .producto-info .precios { font-size: 12px; color: #666; }
+  .producto-info .precios b { color: #e8801e; }
+  .producto-actions { display: flex; gap: 6px; }
+  .estado-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; margin-left: 6px; }
+  .estado-activo { background: #e6f6ea; color: #1e8e3e; }
+  .estado-borrador { background: #f1f1f1; color: #888; }
+  .estado-agotado { background: #fdeeee; color: #c0392b; }
+
+  /* Modal */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: flex-end; justify-content: center; z-index: 50; }
+  .modal-box { background: white; width: 100%; max-width: 480px; border-radius: 14px 14px 0 0; padding: 20px; max-height: 88vh; overflow-y: auto; }
+  .modal-box h3 { margin-top: 0; color: #0d2b4e; }
+  .modal-box label { display: block; font-size: 13px; color: #555; margin-top: 10px; }
+  .modal-box input, .modal-box textarea, .modal-box select { width: 100%; padding: 9px; margin-top: 4px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
+  .modal-box textarea { resize: vertical; min-height: 60px; }
+  .modal-buttons { display: flex; gap: 10px; margin-top: 18px; }
+  .modal-buttons button { flex: 1; padding: 11px; border-radius: 6px; font-size: 14px; border: none; }
+  .precio-final-preview { background: #fff7ec; border-radius: 6px; padding: 10px; margin-top: 10px; font-size: 13px; }
+  .precio-final-preview b { color: #e8801e; font-size: 16px; }
+
+  #errorBanner { background: #fdeeee; color: #c0392b; padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🤝 Huayca — Admin</h1>
+  <button id="btnLogout" class="hidden" onclick="logout()">Cerrar sesión</button>
+</header>
+
+<main>
+
+  <div id="loginBox">
+    <h2>Iniciar sesión</h2>
+    <label>Email</label>
+    <input id="loginEmail" type="email" placeholder="admin@huayca.cl">
+    <label>Contraseña</label>
+    <input id="loginPassword" type="password">
+    <button onclick="login()">Entrar</button>
+    <div id="loginError"></div>
+  </div>
+
+  <div id="app" class="hidden">
+    <div id="errorBanner" class="hidden"></div>
+
+    <!-- Vista: lista de marcas -->
+    <div id="vistaMarcas">
+      <div class="toolbar">
+        <h2>Marcas / Proveedores</h2>
+        <button class="btn-primary" onclick="abrirModalMarca()">+ Nueva marca</button>
+      </div>
+      <div id="marcasGrid" class="marcas-grid"></div>
+    </div>
+
+    <!-- Vista: detalle de una marca -->
+    <div id="vistaMarca" class="hidden">
+      <a class="back-link" onclick="volverAMarcas()">&larr; Todas las marcas</a>
+      <div class="toolbar">
+        <h2 id="marcaNombreTitulo">Marca</h2>
+        <button class="btn-primary" onclick="abrirModalProducto()">+ Nuevo producto</button>
+      </div>
+      <div id="productosList" class="productos-list"></div>
+    </div>
+  </div>
+
+</main>
+
+<!-- Modal: crear/editar marca -->
+<div id="modalMarca" class="modal-overlay hidden">
+  <div class="modal-box">
+    <h3 id="modalMarcaTitulo">Nueva marca</h3>
+    <input type="hidden" id="marcaId">
+    <label>Nombre de la marca</label>
+    <input id="marcaNombre" placeholder="Ej: PROTEGE+">
+    <label>Razón social</label>
+    <input id="marcaRazonSocial" placeholder="Opcional">
+    <label>Email de contacto</label>
+    <input id="marcaEmail" placeholder="Opcional">
+    <label>Teléfono de contacto</label>
+    <input id="marcaTelefono" placeholder="Opcional">
+    <label>URL del logo</label>
+    <input id="marcaLogo" placeholder="https://...">
+    <div class="modal-buttons">
+      <button class="btn-secondary" onclick="cerrarModalMarca()">Cancelar</button>
+      <button class="btn-primary" onclick="guardarMarca()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: crear/editar producto -->
+<div id="modalProducto" class="modal-overlay hidden">
+  <div class="modal-box">
+    <h3 id="modalProductoTitulo">Nuevo producto</h3>
+    <input type="hidden" id="productoId">
+    <label>Nombre del producto</label>
+    <input id="productoNombre" placeholder="Ej: GPS Vehicular">
+    <label>Descripción</label>
+    <textarea id="productoDescripcion"></textarea>
+    <label>URL de imagen principal</label>
+    <input id="productoImagen" placeholder="https://...">
+    <label>Precio proveedor ($)</label>
+    <input id="productoPrecioProveedor" type="number" oninput="actualizarPreview()">
+    <label>Comisión afiliado ($)</label>
+    <input id="productoComisionAfiliado" type="number" oninput="actualizarPreview()">
+    <label>Comisión Huayca ($)</label>
+    <input id="productoComisionHuayca" type="number" oninput="actualizarPreview()">
+    <label>Precio normal / referencia ($) — opcional</label>
+    <input id="productoPrecioNormal" type="number">
+    <label>Stock</label>
+    <input id="productoStock" type="number" value="0">
+    <label>Estado</label>
+    <select id="productoEstado">
+      <option value="borrador">Borrador (no visible en catálogo)</option>
+      <option value="activo">Activo (visible en catálogo)</option>
+      <option value="pausado">Pausado</option>
+      <option value="agotado">Agotado</option>
+    </select>
+    <div class="precio-final-preview">
+      Precio final al cliente: <b id="precioFinalPreview">$0</b>
+    </div>
+    <div class="modal-buttons">
+      <button class="btn-secondary" onclick="cerrarModalProducto()">Cancelar</button>
+      <button class="btn-primary" onclick="guardarProducto()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const BASE_URL = window.location.origin; // el panel vive en el mismo dominio que la API
+let token = localStorage.getItem('huayca_admin_token') || '';
+let marcaActualId = null;
+let marcasCache = [];
+
+// ---------- Auth ----------
+async function login() {
+  const email = document.getElementById('loginEmail').value;
+  const password = document.getElementById('loginPassword').value;
+  const errBox = document.getElementById('loginError');
+  errBox.textContent = '';
+  try {
+    const res = await fetch(BASE_URL + '/api/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.token) {
+      errBox.textContent = data.error || 'Credenciales inválidas';
+      return;
+    }
+    token = data.token;
+    localStorage.setItem('huayca_admin_token', token);
+    mostrarApp();
+  } catch (e) {
+    errBox.textContent = 'Error de conexión: ' + e.message;
+  }
+}
+
+function logout() {
+  token = '';
+  localStorage.removeItem('huayca_admin_token');
+  document.getElementById('app').classList.add('hidden');
+  document.getElementById('btnLogout').classList.add('hidden');
+  document.getElementById('loginBox').classList.remove('hidden');
+}
+
+function mostrarApp() {
+  document.getElementById('loginBox').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  document.getElementById('btnLogout').classList.remove('hidden');
+  cargarMarcas();
+}
+
+function authHeaders() {
+  return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
+}
+
+function mostrarError(msg) {
+  const banner = document.getElementById('errorBanner');
+  banner.textContent = msg;
+  banner.classList.remove('hidden');
+  setTimeout(() => banner.classList.add('hidden'), 5000);
+}
+
+async function apiFetch(path, options = {}) {
+  const res = await fetch(BASE_URL + path, {
+    ...options,
+    headers: { ...authHeaders(), ...(options.headers || {}) }
+  });
+  if (res.status === 401 || res.status === 403) {
+    logout();
+    throw new Error('Sesión expirada, inicia sesión de nuevo');
+  }
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Error en la petición');
+  return data;
+}
+
+// ---------- Marcas ----------
+async function cargarMarcas() {
+  try {
+    const data = await apiFetch('/api/admin/proveedores');
+    marcasCache = Array.isArray(data) ? data : (data.proveedores || []);
+    renderMarcas();
+  } catch (e) {
+    mostrarError(e.message);
+  }
+}
+
+function renderMarcas() {
+  const grid = document.getElementById('marcasGrid');
+  grid.innerHTML = '';
+  if (!marcasCache.length) {
+    grid.innerHTML = '<p style="color:#888;">Aún no hay marcas. Crea la primera con el botón de arriba.</p>';
+    return;
+  }
+  marcasCache.forEach(m => {
+    const card = document.createElement('div');
+    card.className = 'marca-card';
+    card.onclick = () => verMarca(m.id, m.nombre);
+    card.innerHTML = `
+      ${m.logo_url
+        ? `<img class="marca-logo" src="${m.logo_url}" alt="${m.nombre}">`
+        : `<div class="marca-logo-placeholder">Sin logo</div>`}
+      <h3>${m.nombre}</h3>
+      <p>${m.email_contacto || 'Sin contacto registrado'}</p>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+function abrirModalMarca() {
+  document.getElementById('modalMarcaTitulo').textContent = 'Nueva marca';
+  document.getElementById('marcaId').value = '';
+  ['marcaNombre','marcaRazonSocial','marcaEmail','marcaTelefono','marcaLogo'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('modalMarca').classList.remove('hidden');
+}
+function cerrarModalMarca() { document.getElementById('modalMarca').classList.add('hidden'); }
+
+async function guardarMarca() {
+  const payload = {
+    nombre: document.getElementById('marcaNombre').value,
+    razon_social: document.getElementById('marcaRazonSocial').value || null,
+    email_contacto: document.getElementById('marcaEmail').value || null,
+    telefono_contacto: document.getElementById('marcaTelefono').value || null,
+    logo_url: document.getElementById('marcaLogo').value || null
+  };
+  if (!payload.nombre) { mostrarError('El nombre de la marca es obligatorio'); return; }
+  try {
+    await apiFetch('/api/admin/proveedores', { method: 'POST', body: JSON.stringify(payload) });
+    cerrarModalMarca();
+    cargarMarcas();
+  } catch (e) {
+    mostrarError(e.message);
+  }
+}
+
+// ---------- Vista de una marca + sus productos ----------
+async function verMarca(id, nombre) {
+  marcaActualId = id;
+  document.getElementById('marcaNombreTitulo').textContent = nombre;
+  document.getElementById('vistaMarcas').classList.add('hidden');
+  document.getElementById('vistaMarca').classList.remove('hidden');
+  await cargarProductos();
+}
+
+function volverAMarcas() {
+  marcaActualId = null;
+  document.getElementById('vistaMarca').classList.add('hidden');
+  document.getElementById('vistaMarcas').classList.remove('hidden');
+}
+
+async function cargarProductos() {
+  try {
+    const data = await apiFetch('/api/admin/productos?proveedor_id=' + marcaActualId);
+    const productos = Array.isArray(data) ? data : (data.productos || []);
+    renderProductos(productos);
+  } catch (e) {
+    mostrarError(e.message);
+  }
+}
+
+function renderProductos(productos) {
+  const list = document.getElementById('productosList');
+  list.innerHTML = '';
+  if (!productos.length) {
+    list.innerHTML = '<p style="color:#888;">Esta marca aún no tiene productos.</p>';
+    return;
+  }
+  productos.forEach(p => {
+    const row = document.createElement('div');
+    row.className = 'producto-row';
+    const estadoClass = 'estado-' + (p.estado || 'borrador');
+    row.innerHTML = `
+      <div class="producto-info">
+        <h4>${p.nombre} <span class="estado-badge ${estadoClass}">${p.estado}</span></h4>
+        <div class="precios">Final: <b>$${Number(p.precio_final).toLocaleString('es-CL')}</b> · Stock: ${p.stock}</div>
+      </div>
+      <div class="producto-actions">
+        <button class="btn-secondary" onclick='editarProducto(${JSON.stringify(p)})'>Editar</button>
+      </div>
+    `;
+    list.appendChild(row);
+  });
+}
+
+// ---------- Productos ----------
+function abrirModalProducto() {
+  document.getElementById('modalProductoTitulo').textContent = 'Nuevo producto';
+  document.getElementById('productoId').value = '';
+  ['productoNombre','productoDescripcion','productoImagen','productoPrecioProveedor','productoComisionAfiliado','productoComisionHuayca','productoPrecioNormal'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('productoStock').value = 0;
+  document.getElementById('productoEstado').value = 'borrador';
+  actualizarPreview();
+  document.getElementById('modalProducto').classList.remove('hidden');
+}
+
+function editarProducto(p) {
+  document.getElementById('modalProductoTitulo').textContent = 'Editar producto';
+  document.getElementById('productoId').value = p.id;
+  document.getElementById('productoNombre').value = p.nombre || '';
+  document.getElementById('productoDescripcion').value = p.descripcion || '';
+  document.getElementById('productoImagen').value = p.imagen_principal || '';
+  document.getElementById('productoPrecioProveedor').value = p.precio_proveedor || 0;
+  document.getElementById('productoComisionAfiliado').value = p.comision_afiliado || 0;
+  document.getElementById('productoComisionHuayca').value = p.comision_huayca || 0;
+  document.getElementById('productoPrecioNormal').value = p.precio_normal || '';
+  document.getElementById('productoStock').value = p.stock || 0;
+  document.getElementById('productoEstado').value = p.estado || 'borrador';
+  actualizarPreview();
+  document.getElementById('modalProducto').classList.remove('hidden');
+}
+
+function cerrarModalProducto() { document.getElementById('modalProducto').classList.add('hidden'); }
+
+function actualizarPreview() {
+  const pp = Number(document.getElementById('productoPrecioProveedor').value) || 0;
+  const ca = Number(document.getElementById('productoComisionAfiliado').value) || 0;
+  const ch = Number(document.getElementById('productoComisionHuayca').value) || 0;
+  document.getElementById('precioFinalPreview').textContent = '$' + (pp + ca + ch).toLocaleString('es-CL');
+}
+
+async function guardarProducto() {
+  const id = document.getElementById('productoId').value;
+  const payload = {
+    proveedor_id: marcaActualId,
+    nombre: document.getElementById('productoNombre').value,
+    descripcion: document.getElementById('productoDescripcion').value || null,
+    imagen_principal: document.getElementById('productoImagen').value || null,
+    precio_proveedor: Number(document.getElementById('productoPrecioProveedor').value) || 0,
+    comision_afiliado: Number(document.getElementById('productoComisionAfiliado').value) || 0,
+    comision_huayca: Number(document.getElementById('productoComisionHuayca').value) || 0,
+    precio_normal: document.getElementById('productoPrecioNormal').value ? Number(document.getElementById('productoPrecioNormal').value) : null,
+    stock: Number(document.getElementById('productoStock').value) || 0,
+    estado: document.getElementById('productoEstado').value
+  };
+  if (!payload.nombre) { mostrarError('El nombre del producto es obligatorio'); return; }
+  try {
+    if (id) {
+      await apiFetch('/api/admin/productos/' + id, { method: 'PUT', body: JSON.stringify(payload) });
+    } else {
+      await apiFetch('/api/admin/productos', { method: 'POST', body: JSON.stringify(payload) });
+    }
+    cerrarModalProducto();
+    cargarProductos();
+  } catch (e) {
+    mostrarError(e.message);
+  }
+}
+
+// ---------- Init ----------
+if (token) mostrarApp();
+</script>
+
+</body>
+</html>
