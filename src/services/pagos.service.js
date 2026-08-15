@@ -1,0 +1,141 @@
+const db = require('../config/db');
+
+// Busca el pedido por id o por código y lo bloquea (FOR UPDATE) dentro de
+// una transacción ya abierta, para evitar condiciones de carrera si llegan
+// dos notificaciones del webhook casi al mismo tiempo.
+async function buscarPedidoParaActualizar(conn, { id, codigo }) {
+  const [rows] = id
+    ? await conn.query('SELECT * FROM pedidos WHERE id = ? FOR UPDATE', [id])
+    : await conn.query('SELECT * FROM pedidos WHERE codigo = ? FOR UPDATE', [codigo]);
+  return rows[0] || null;
+}
+
+// Marca el pedido como pagado y "activa" las comisiones asociadas: recién
+// en este momento se crean las filas en `comisiones` (proveedor / huayca /
+// afiliado según corresponda). Antes de esto el pedido existe con stock ya
+// reservado, pero ninguna comisión cuenta para el saldo de la organización,
+// porque el pago todavía no está confirmado.
+//
+// Es idempotente: si el pedido ya estaba aprobado (reintento del webhook,
+// doble notificación), no vuelve a insertar comisiones ni a duplicar nada.
+async function aprobarPagoPedido({ id, codigo, referencia_externa, metodo_pago, payload_respuesta, monto }) {
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const pedido = await buscarPedidoParaActualizar(conn, { id, codigo });
+    if (!pedido) {
+      await conn.rollback();
+      return { ok: false, motivo: 'pedido_no_encontrado' };
+    }
+
+    if (pedido.estado_pago === 'aprobado') {
+      await conn.commit();
+      return { ok: true, pedido, ya_procesado: true };
+    }
+
+    await conn.query(`UPDATE pedidos SET estado_pago = 'aprobado' WHERE id = ?`, [pedido.id]);
+
+    await conn.query(
+      `INSERT INTO pagos (pedido_id, referencia_externa, monto, estado, metodo_pago, payload_respuesta)
+       VALUES (?, ?, ?, 'aprobado', ?, ?)`,
+      [
+        pedido.id,
+        referencia_externa || null,
+        monto || pedido.monto_total,
+        metodo_pago || null,
+        JSON.stringify(payload_respuesta || null)
+      ]
+    );
+
+    // Si no hay organización, la comisión de afiliado queda para Huayca
+    // (no existe "afiliado casa").
+    const comisiones = [
+      [pedido.id, 'proveedor', null, pedido.monto_proveedor],
+      [
+        pedido.id,
+        'huayca',
+        null,
+        pedido.organizacion_id
+          ? pedido.monto_comision_huayca
+          : Number(pedido.monto_comision_huayca) + Number(pedido.monto_comision_afiliado)
+      ]
+    ];
+    if (pedido.organizacion_id) {
+      comisiones.push([pedido.id, 'afiliado', pedido.organizacion_id, pedido.monto_comision_afiliado]);
+    }
+    for (const c of comisiones) {
+      await conn.query(
+        `INSERT INTO comisiones (pedido_id, tipo, organizacion_id, monto) VALUES (?, ?, ?, ?)`,
+        c
+      );
+    }
+
+    if (pedido.organizacion_id) {
+      await conn.query(
+        `UPDATE organizaciones SET saldo_disponible = saldo_disponible + ? WHERE id = ?`,
+        [pedido.monto_comision_afiliado, pedido.organizacion_id]
+      );
+    }
+
+    await conn.commit();
+    return { ok: true, pedido };
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+}
+
+// Marca el pedido como rechazado/reembolsado y devuelve el stock reservado
+// al crear el pedido, ya que la venta finalmente no se concretó. No toca
+// comisiones porque, si el pago nunca fue aprobado, nunca se crearon.
+async function rechazarPagoPedido({ id, codigo, referencia_externa, metodo_pago, payload_respuesta, monto, motivo_estado = 'rechazado' }) {
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const pedido = await buscarPedidoParaActualizar(conn, { id, codigo });
+    if (!pedido) {
+      await conn.rollback();
+      return { ok: false, motivo: 'pedido_no_encontrado' };
+    }
+
+    if (pedido.estado_pago === 'aprobado') {
+      // Ya se había aprobado antes (notificación duplicada o fuera de orden); no revertimos ventas concretadas.
+      await conn.commit();
+      return { ok: true, pedido, ignorado: true };
+    }
+    if (pedido.estado_pago === motivo_estado) {
+      await conn.commit();
+      return { ok: true, pedido, ya_procesado: true };
+    }
+
+    await conn.query('UPDATE pedidos SET estado_pago = ? WHERE id = ?', [motivo_estado, pedido.id]);
+    await conn.query('UPDATE productos SET stock = stock + ? WHERE id = ?', [pedido.cantidad, pedido.producto_id]);
+
+    await conn.query(
+      `INSERT INTO pagos (pedido_id, referencia_externa, monto, estado, metodo_pago, payload_respuesta)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        pedido.id,
+        referencia_externa || null,
+        monto || pedido.monto_total,
+        motivo_estado === 'reembolsado' ? 'reembolsado' : 'rechazado',
+        metodo_pago || null,
+        JSON.stringify(payload_respuesta || null)
+      ]
+    );
+
+    await conn.commit();
+    return { ok: true, pedido };
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+}
+
+module.exports = { aprobarPagoPedido, rechazarPagoPedido };
