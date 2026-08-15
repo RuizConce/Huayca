@@ -13,6 +13,29 @@ function slugify(texto) {
     .replace(/(^-|-$)/g, '');
 }
 
+// GET /api/organizaciones?q=texto - listado público (solo aprobadas), para el
+// buscador "Apoya a tu organización favorita" del frontend.
+router.get('/', async (req, res) => {
+  try {
+    const { q } = req.query;
+    let query = `
+      SELECT id, nombre, tipo, slug, logo_url, descripcion_proyecto, region, comuna
+      FROM organizaciones WHERE estado = 'aprobada'
+    `;
+    const params = [];
+    if (q) {
+      query += ' AND nombre LIKE ?';
+      params.push(`%${q}%`);
+    }
+    query += ' ORDER BY nombre';
+    const [rows] = await db.query(query, params);
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al listar organizaciones' });
+  }
+});
+
 // POST /api/organizaciones/registro
 router.post('/registro', async (req, res) => {
   try {
@@ -115,6 +138,25 @@ router.get('/mi-dashboard', requireAuth(['organizacion']), async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error al obtener dashboard' });
+  }
+});
+
+// GET /api/organizaciones/:slug - perfil público de una organización aprobada
+// (usado para el banner "estás comprando a través de..." y su página de perfil).
+// Va al final: si se registrara antes que /mi-dashboard, "mi-dashboard"
+// matchearía acá como si fuera un slug y nunca llegaría a esa ruta.
+router.get('/:slug', async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      `SELECT id, nombre, tipo, slug, logo_url, descripcion_proyecto, region, comuna
+       FROM organizaciones WHERE slug = ? AND estado = 'aprobada'`,
+      [req.params.slug]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Organización no encontrada' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al obtener organización' });
   }
 });
 

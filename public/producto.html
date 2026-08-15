@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title id="tituloPagina">Huayca — Producto</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="css/huayca.css">
+</head>
+<body>
+
+<div class="anuncio-bar">
+  <div class="container">
+    <span>💚 Cada compra fortalece una organización y mejora la vida de más personas.</span>
+    <span class="der">Juntos hacemos comunidad</span>
+  </div>
+</div>
+
+<header class="site">
+  <div class="nav-principal">
+    <a href="index.html" class="logo">
+      <div class="logo-mark">H</div>
+      <div class="logo-texto"><b>Huayca</b><span>CONECTAMOS COMUNIDADES</span></div>
+    </a>
+    <div class="buscador-header">
+      <form id="buscadorHeaderForm">
+        <input id="buscadorHeaderInput" type="search" placeholder="¿Qué producto buscas?">
+        <button type="submit" aria-label="Buscar">🔍</button>
+      </form>
+    </div>
+    <div class="nav-acciones">
+      <a href="organizacion-registro.html" id="navAccionOrg" class="nav-accion">
+        <span class="icono">🤝</span>
+        <span><span class="txt">Apoya a</span><small>organizaciones</small></span>
+      </a>
+      <a href="organizacion-login.html" class="nav-accion">
+        <span class="icono">👤</span>
+        <span><span class="txt">Iniciar</span><small>sesión</small></span>
+      </a>
+      <a href="catalogo.html" class="nav-accion carrito-wrap">
+        <span class="icono">🛒</span>
+      </a>
+    </div>
+    <button class="menu-toggle" id="menuToggle" aria-label="Menú">☰</button>
+  </div>
+  <div class="categorias-bar">
+    <div class="container">
+      <a href="catalogo.html" class="dropdown-cat">Todas las categorías ▾</a>
+      <a href="catalogo.html?categoria=seguridad">Seguridad</a>
+      <a href="catalogo.html?categoria=salud">Salud</a>
+      <a href="catalogo.html?categoria=familia">Familia</a>
+      <a href="catalogo.html?categoria=movilidad">Movilidad</a>
+      <a href="catalogo.html?categoria=hogar">Hogar</a>
+      <a href="catalogo.html?categoria=tecnologia">Tecnología</a>
+      <a href="catalogo.html?categoria=educacion">Educación y más</a>
+      <a href="catalogo.html?destacado=1" class="cta-ofertas">💚 Ofertas con propósito</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="container page-header">
+    <div class="breadcrumb"><a href="index.html">Inicio</a> / <a href="catalogo.html">Catálogo</a> / <span id="breadcrumbProducto">Producto</span></div>
+    <div id="orgBanner" class="org-banner hidden"></div>
+  </div>
+
+  <div id="contenidoProducto" class="container">
+    <div class="estado-vacio">Cargando producto…</div>
+  </div>
+</main>
+
+<footer class="site">
+  <div class="container">
+    <div class="footer-grid">
+      <div>
+        <div class="footer-logo">
+          <div class="logo-mark">H</div>
+          <b>Huayca</b>
+        </div>
+        <p class="tagline">Conectamos comunidades. Tecnología, bienestar y oportunidades que transforman comunidades.</p>
+        <div class="footer-social">
+          <span>📷</span><span>📘</span><span>🎵</span><span>▶️</span>
+        </div>
+      </div>
+      <div>
+        <h4>CATEGORÍAS</h4>
+        <ul>
+          <li><a href="catalogo.html?categoria=seguridad">Seguridad</a></li>
+          <li><a href="catalogo.html?categoria=salud">Salud</a></li>
+          <li><a href="catalogo.html?categoria=familia">Familia</a></li>
+          <li><a href="catalogo.html?categoria=movilidad">Movilidad</a></li>
+          <li><a href="catalogo.html?categoria=hogar">Hogar</a></li>
+          <li><a href="catalogo.html?categoria=tecnologia">Tecnología</a></li>
+          <li><a href="catalogo.html?destacado=1">Ofertas</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>AYUDA</h4>
+        <ul>
+          <li><a href="index.html#como-funciona">Preguntas frecuentes</a></li>
+          <li><a href="index.html#como-funciona">Envíos y devoluciones</a></li>
+          <li><a href="#">Términos y condiciones</a></li>
+          <li><a href="#">Contacto</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>ORGANIZACIONES</h4>
+        <ul>
+          <li><a href="organizacion-registro.html">Registrar organización</a></li>
+          <li><a href="organizacion-login.html">Iniciar sesión</a></li>
+          <li><a href="organizacion-dashboard.html">Mi dashboard</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 Huayca. Todos los derechos reservados.</span>
+      <span class="firma">Juntos hacemos comunidad.</span>
+    </div>
+  </div>
+</footer>
+
+<script src="js/huayca.js"></script>
+<script>
+async function cargarProducto() {
+  const params = new URLSearchParams(window.location.search);
+  const slug = params.get('slug');
+  const cont = document.getElementById('contenidoProducto');
+
+  if (!slug) {
+    cont.innerHTML = '<div class="estado-vacio">Producto no especificado. <a href="catalogo.html">Volver al catálogo</a>.</div>';
+    return;
+  }
+
+  try {
+    const p = await Huayca.apiFetch('/api/productos/' + encodeURIComponent(slug));
+    document.getElementById('tituloPagina').textContent = `Huayca — ${p.nombre}`;
+    document.getElementById('breadcrumbProducto').textContent = p.nombre;
+
+    const orgSlug = Huayca.getOrgActivaSlug();
+    const linkCheckout = `checkout.html?slug=${encodeURIComponent(p.slug)}${orgSlug ? '&org=' + encodeURIComponent(orgSlug) : ''}`;
+
+    cont.innerHTML = `
+      <div class="ficha-producto">
+        <div class="ficha-img">${p.imagen_principal ? `<img src="${p.imagen_principal}" alt="${p.nombre}">` : Huayca.iconoProducto(p)}</div>
+        <div class="ficha-info">
+          ${p.categoria_nombre ? `<span class="cat-tag">${p.categoria_nombre}</span>` : ''}
+          <h1>${p.nombre}</h1>
+          <p class="desc">${p.descripcion || 'Sin descripción disponible.'}</p>
+          <div class="ficha-precios">
+            <span class="final">${Huayca.formatoCLP(p.precio_final)}</span>
+            ${p.precio_normal ? `<span class="normal">${Huayca.formatoCLP(p.precio_normal)}</span>` : ''}
+          </div>
+          <span class="producto-apoyo">Apoya a tu organización favorita con esta compra</span>
+          <div class="ficha-meta">
+            <span><b>Garantía:</b> ${p.garantia_meses || 6} meses</span>
+            <span><b>Stock:</b> ${p.stock > 0 ? p.stock + ' disponibles' : 'Agotado'}</span>
+            <span><b>Proveedor:</b> ${p.proveedor_nombre || '—'}</span>
+          </div>
+          <a href="${p.stock > 0 ? linkCheckout : '#'}" class="btn btn-primary btn-block" ${p.stock > 0 ? '' : 'style="pointer-events:none;opacity:.5;"'}>
+            ${p.stock > 0 ? 'Comprar ahora →' : 'Sin stock'}
+          </a>
+        </div>
+      </div>
+    `;
+  } catch (e) {
+    cont.innerHTML = '<div class="estado-vacio">No encontramos este producto. <a href="catalogo.html">Volver al catálogo</a>.</div>';
+  }
+}
+
+cargarProducto();
+Huayca.pintarBannerOrg('orgBanner');
+</script>
+
+</body>
+</html>

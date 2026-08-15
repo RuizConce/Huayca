@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Huayca — Organizaciones</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="css/huayca.css">
+</head>
+<body>
+
+<div class="anuncio-bar">
+  <div class="container">
+    <span>💚 Cada compra fortalece una organización y mejora la vida de más personas.</span>
+    <span class="der">Juntos hacemos comunidad</span>
+  </div>
+</div>
+
+<header class="site">
+  <div class="nav-principal">
+    <a href="index.html" class="logo">
+      <div class="logo-mark">H</div>
+      <div class="logo-texto"><b>Huayca</b><span>CONECTAMOS COMUNIDADES</span></div>
+    </a>
+    <div class="buscador-header">
+      <form id="buscadorHeaderForm">
+        <input id="buscadorHeaderInput" type="search" placeholder="¿Qué producto buscas?">
+        <button type="submit" aria-label="Buscar">🔍</button>
+      </form>
+    </div>
+    <div class="nav-acciones">
+      <a href="organizacion-registro.html" id="navAccionOrg" class="nav-accion">
+        <span class="icono">🤝</span>
+        <span><span class="txt">Apoya a</span><small>organizaciones</small></span>
+      </a>
+      <a href="organizacion-login.html" class="nav-accion">
+        <span class="icono">👤</span>
+        <span><span class="txt">Iniciar</span><small>sesión</small></span>
+      </a>
+      <a href="catalogo.html" class="nav-accion carrito-wrap">
+        <span class="icono">🛒</span>
+      </a>
+    </div>
+    <button class="menu-toggle" id="menuToggle" aria-label="Menú">☰</button>
+  </div>
+  <div class="categorias-bar">
+    <div class="container">
+      <a href="catalogo.html" class="dropdown-cat">Todas las categorías ▾</a>
+      <a href="catalogo.html?categoria=seguridad">Seguridad</a>
+      <a href="catalogo.html?categoria=salud">Salud</a>
+      <a href="catalogo.html?categoria=familia">Familia</a>
+      <a href="catalogo.html?categoria=movilidad">Movilidad</a>
+      <a href="catalogo.html?categoria=hogar">Hogar</a>
+      <a href="catalogo.html?categoria=tecnologia">Tecnología</a>
+      <a href="catalogo.html?categoria=educacion">Educación y más</a>
+      <a href="catalogo.html?destacado=1" class="cta-ofertas">💚 Ofertas con propósito</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="container page-header">
+    <div class="breadcrumb"><a href="index.html">Inicio</a> / Organizaciones</div>
+    <div class="seccion-header" style="margin-bottom:6px;">
+      <h2>Apoya a tu organización favorita</h2>
+    </div>
+    <p style="color:var(--text-muted); font-size:14px; max-width:560px; margin:0 0 20px;">
+      Elige una organización aprobada por Huayca: cuando compras a través de su link, parte de tu compra se destina directo a su proyecto.
+    </p>
+    <div class="buscador-header" style="max-width:420px; margin-bottom:24px;">
+      <form id="buscadorOrgForm">
+        <input id="buscadorOrgInput" type="search" placeholder="Buscar por nombre...">
+        <button type="submit" aria-label="Buscar">🔍</button>
+      </form>
+    </div>
+  </div>
+
+  <section class="container seccion" style="padding-top:0;">
+    <div class="productos-grid" id="gridOrganizaciones" style="grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));">
+      <div class="estado-vacio">Cargando organizaciones…</div>
+    </div>
+  </section>
+</main>
+
+<footer class="site">
+  <div class="container">
+    <div class="footer-grid">
+      <div>
+        <div class="footer-logo">
+          <div class="logo-mark">H</div>
+          <b>Huayca</b>
+        </div>
+        <p class="tagline">Conectamos comunidades. Tecnología, bienestar y oportunidades que transforman comunidades.</p>
+        <div class="footer-social">
+          <span>📷</span><span>📘</span><span>🎵</span><span>▶️</span>
+        </div>
+      </div>
+      <div>
+        <h4>CATEGORÍAS</h4>
+        <ul>
+          <li><a href="catalogo.html?categoria=seguridad">Seguridad</a></li>
+          <li><a href="catalogo.html?categoria=salud">Salud</a></li>
+          <li><a href="catalogo.html?categoria=familia">Familia</a></li>
+          <li><a href="catalogo.html?categoria=movilidad">Movilidad</a></li>
+          <li><a href="catalogo.html?categoria=hogar">Hogar</a></li>
+          <li><a href="catalogo.html?categoria=tecnologia">Tecnología</a></li>
+          <li><a href="catalogo.html?destacado=1">Ofertas</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>AYUDA</h4>
+        <ul>
+          <li><a href="index.html#como-funciona">Preguntas frecuentes</a></li>
+          <li><a href="index.html#como-funciona">Envíos y devoluciones</a></li>
+          <li><a href="#">Términos y condiciones</a></li>
+          <li><a href="#">Contacto</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>ORGANIZACIONES</h4>
+        <ul>
+          <li><a href="organizacion-registro.html">Registrar organización</a></li>
+          <li><a href="organizacion-login.html">Iniciar sesión</a></li>
+          <li><a href="organizacion-dashboard.html">Mi dashboard</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 Huayca. Todos los derechos reservados.</span>
+      <span class="firma">Juntos hacemos comunidad.</span>
+    </div>
+  </div>
+</footer>
+
+<script src="js/huayca.js"></script>
+<script>
+const TIPO_LABEL = {
+  colegio: '🎓 Colegio',
+  junta_vecinos: '🏘️ Junta de vecinos',
+  club_deportivo: '🏆 Club deportivo',
+  fundacion: '❤️ Fundación',
+  centro_comunitario: '👥 Centro comunitario',
+  otro: '🤝 Organización'
+};
+
+async function cargarOrganizaciones(q) {
+  const grid = document.getElementById('gridOrganizaciones');
+  grid.innerHTML = '<div class="estado-vacio">Cargando organizaciones…</div>';
+  try {
+    const path = '/api/organizaciones' + (q ? '?q=' + encodeURIComponent(q) : '');
+    const orgs = await Huayca.apiFetch(path);
+    if (!orgs.length) {
+      grid.innerHTML = '<div class="estado-vacio">No encontramos organizaciones' + (q ? ' para "' + q + '"' : ' aprobadas todavía') + '.</div>';
+      return;
+    }
+    grid.innerHTML = orgs.map((o) => `
+      <a class="producto-card" href="catalogo.html?org=${encodeURIComponent(o.slug)}" style="text-decoration:none;">
+        <div class="producto-img-wrap">
+          <div class="placeholder-icono">${o.logo_url ? `<img src="${o.logo_url}" alt="${o.nombre}" style="width:100%;height:100%;object-fit:contain;">` : (TIPO_LABEL[o.tipo] || '🤝').split(' ')[0]}</div>
+        </div>
+        <div class="producto-info">
+          <h3>${o.nombre}</h3>
+          <span class="producto-apoyo">${TIPO_LABEL[o.tipo] || 'Organización'}${o.comuna ? ' · ' + o.comuna : ''}</span>
+          ${o.descripcion_proyecto ? `<p style="font-size:12.5px;color:var(--text-muted);margin:4px 0 0;">${o.descripcion_proyecto}</p>` : ''}
+        </div>
+      </a>
+    `).join('');
+  } catch (e) {
+    grid.innerHTML = '<div class="estado-vacio">No se pudo cargar el listado. Intenta de nuevo más tarde.</div>';
+  }
+}
+
+document.getElementById('buscadorOrgForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  cargarOrganizaciones(document.getElementById('buscadorOrgInput').value.trim());
+});
+
+cargarOrganizaciones();
+</script>
+
+</body>
+</html>

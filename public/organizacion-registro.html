@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Huayca — Registra tu organización</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="css/huayca.css">
+</head>
+<body>
+
+<div class="anuncio-bar">
+  <div class="container">
+    <span>💚 Cada compra fortalece una organización y mejora la vida de más personas.</span>
+    <span class="der">Juntos hacemos comunidad</span>
+  </div>
+</div>
+
+<header class="site">
+  <div class="nav-principal">
+    <a href="index.html" class="logo">
+      <div class="logo-mark">H</div>
+      <div class="logo-texto"><b>Huayca</b><span>CONECTAMOS COMUNIDADES</span></div>
+    </a>
+    <div class="nav-acciones" style="margin-left:auto;">
+      <a href="organizacion-login.html" class="nav-accion">
+        <span class="icono">👤</span>
+        <span><span class="txt">Iniciar</span><small>sesión</small></span>
+      </a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="seccion" style="padding-top:40px;">
+    <div class="card-form" id="formCard">
+      <h2>Registra tu organización</h2>
+      <p class="sub">Colegios, juntas de vecinos, clubes deportivos y fundaciones pueden generar fondos para su proyecto compartiendo productos Huayca.</p>
+      <form id="formRegistro">
+        <div class="campo"><label>Nombre de la organización</label><input id="nombre" required></div>
+        <div class="campo">
+          <label>Tipo de organización</label>
+          <select id="tipo">
+            <option value="colegio">Colegio</option>
+            <option value="junta_vecinos">Junta de vecinos</option>
+            <option value="club_deportivo">Club deportivo</option>
+            <option value="fundacion">Fundación</option>
+            <option value="centro_comunitario">Centro comunitario</option>
+            <option value="otro">Otro</option>
+          </select>
+        </div>
+        <div class="campo-fila">
+          <div class="campo"><label>Email</label><input id="email" type="email" required></div>
+          <div class="campo"><label>Contraseña</label><input id="password" type="password" required minlength="6"></div>
+        </div>
+        <div class="campo-fila">
+          <div class="campo"><label>Teléfono</label><input id="telefono" type="tel"></div>
+          <div class="campo"><label>Comuna</label><input id="comuna"></div>
+        </div>
+        <div class="campo"><label>Región</label><input id="region"></div>
+        <div class="campo">
+          <label>¿Para qué proyecto usarán los fondos?</label>
+          <textarea id="descripcion_proyecto" placeholder="Ej: renovar la biblioteca, comprar implementos deportivos..."></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block" id="btnRegistro">Registrar organización</button>
+        <div id="registroMsg"></div>
+      </form>
+      <div class="form-footer-link">¿Ya tienes cuenta? <a href="organizacion-login.html">Inicia sesión</a></div>
+    </div>
+  </section>
+</main>
+
+<footer class="site">
+  <div class="container footer-bottom" style="border-top:1px solid rgba(255,255,255,0.1); margin-top:0;">
+    <span>© 2026 Huayca. Todos los derechos reservados.</span>
+    <span class="firma">Juntos hacemos comunidad.</span>
+  </div>
+</footer>
+
+<script src="js/huayca.js"></script>
+<script>
+const params = new URLSearchParams(window.location.search);
+const tipoPreseleccionado = params.get('tipo');
+if (tipoPreseleccionado) document.getElementById('tipo').value = tipoPreseleccionado;
+
+document.getElementById('formRegistro').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById('registroMsg');
+  const btn = document.getElementById('btnRegistro');
+  msg.innerHTML = '';
+
+  const payload = {
+    nombre: document.getElementById('nombre').value.trim(),
+    tipo: document.getElementById('tipo').value,
+    email: document.getElementById('email').value.trim(),
+    password: document.getElementById('password').value,
+    telefono: document.getElementById('telefono').value.trim() || undefined,
+    region: document.getElementById('region').value.trim() || undefined,
+    comuna: document.getElementById('comuna').value.trim() || undefined,
+    descripcion_proyecto: document.getElementById('descripcion_proyecto').value.trim() || undefined
+  };
+
+  btn.disabled = true;
+  btn.textContent = 'Enviando…';
+  try {
+    await Huayca.apiFetch('/api/organizaciones/registro', { method: 'POST', body: JSON.stringify(payload) });
+    document.getElementById('formCard').innerHTML = `
+      <h2>¡Listo!</h2>
+      <p class="sub" style="margin-bottom:0;">Tu organización quedó registrada y pendiente de aprobación por Huayca. Te avisaremos por email apenas esté aprobada para que puedas iniciar sesión y compartir tu link.</p>
+      <a href="index.html" class="btn btn-outline-green btn-block" style="margin-top:20px;">Volver al inicio</a>
+    `;
+  } catch (err) {
+    msg.innerHTML = `<div class="form-msg error">${err.message}</div>`;
+    btn.disabled = false;
+    btn.textContent = 'Registrar organización';
+  }
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Huayca — Iniciar sesión</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="css/huayca.css">
+</head>
+<body>
+
+<div class="anuncio-bar">
+  <div class="container">
+    <span>💚 Cada compra fortalece una organización y mejora la vida de más personas.</span>
+    <span class="der">Juntos hacemos comunidad</span>
+  </div>
+</div>
+
+<header class="site">
+  <div class="nav-principal">
+    <a href="index.html" class="logo">
+      <div class="logo-mark">H</div>
+      <div class="logo-texto"><b>Huayca</b><span>CONECTAMOS COMUNIDADES</span></div>
+    </a>
+    <div class="nav-acciones" style="margin-left:auto;">
+      <a href="organizacion-registro.html" class="nav-accion">
+        <span class="icono">🤝</span>
+        <span><span class="txt">Registrar</span><small>organización</small></span>
+      </a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="seccion" style="padding-top:60px;">
+    <div class="card-form">
+      <h2>Iniciar sesión</h2>
+      <p class="sub">Accede al dashboard de tu organización para ver tus comisiones y tu link para compartir.</p>
+      <form id="formLogin">
+        <div class="campo"><label>Email</label><input id="email" type="email" required></div>
+        <div class="campo"><label>Contraseña</label><input id="password" type="password" required></div>
+        <button type="submit" class="btn btn-primary btn-block" id="btnLogin">Entrar</button>
+        <div id="loginMsg"></div>
+      </form>
+      <div class="form-footer-link">¿Aún no tienes cuenta? <a href="organizacion-registro.html">Regístrate</a></div>
+    </div>
+  </section>
+</main>
+
+<footer class="site">
+  <div class="container footer-bottom" style="border-top:1px solid rgba(255,255,255,0.1); margin-top:0;">
+    <span>© 2026 Huayca. Todos los derechos reservados.</span>
+    <span class="firma">Juntos hacemos comunidad.</span>
+  </div>
+</footer>
+
+<script src="js/huayca.js"></script>
+<script>
+if (Huayca.getTokenOrg()) window.location.href = 'organizacion-dashboard.html';
+
+document.getElementById('formLogin').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById('loginMsg');
+  const btn = document.getElementById('btnLogin');
+  msg.innerHTML = '';
+
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+
+  btn.disabled = true;
+  btn.textContent = 'Ingresando…';
+  try {
+    const data = await Huayca.apiFetch('/api/organizaciones/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password })
+    });
+    Huayca.guardarSesionOrg(data.token, data.organizacion);
+    window.location.href = 'organizacion-dashboard.html';
+  } catch (err) {
+    msg.innerHTML = `<div class="form-msg error">${err.message}</div>`;
+    btn.disabled = false;
+    btn.textContent = 'Entrar';
+  }
+});
+</script>
+
+</body>
+</html>

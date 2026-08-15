@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Huayca — Mi organización</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="css/huayca.css">
+</head>
+<body>
+
+<div class="anuncio-bar">
+  <div class="container">
+    <span>💚 Cada compra fortalece una organización y mejora la vida de más personas.</span>
+    <span class="der">Juntos hacemos comunidad</span>
+  </div>
+</div>
+
+<header class="site">
+  <div class="nav-principal">
+    <a href="index.html" class="logo">
+      <div class="logo-mark">H</div>
+      <div class="logo-texto"><b>Huayca</b><span>CONECTAMOS COMUNIDADES</span></div>
+    </a>
+    <div class="nav-acciones" style="margin-left:auto;">
+      <span class="nav-accion" id="nombreOrgHeader"></span>
+      <button class="btn btn-sm btn-outline" id="btnLogout">Cerrar sesión</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="container dash-header">
+    <h1 id="tituloDash">Mi organización</h1>
+  </div>
+
+  <div id="vistaDash" class="container">
+    <div class="estado-vacio">Cargando dashboard…</div>
+  </div>
+</main>
+
+<footer class="site">
+  <div class="container footer-bottom" style="border-top:1px solid rgba(255,255,255,0.1); margin-top:30px;">
+    <span>© 2026 Huayca. Todos los derechos reservados.</span>
+    <span class="firma">Juntos hacemos comunidad.</span>
+  </div>
+</footer>
+
+<script src="js/huayca.js"></script>
+<script>
+const ESTADO_LABEL = {
+  pendiente: 'Pendiente', solicitada: 'Solicitada', aprobada: 'Aprobada', pagada: 'Pagada', anulada: 'Anulada'
+};
+
+function irALogin() {
+  Huayca.cerrarSesionOrg();
+  window.location.href = 'organizacion-login.html';
+}
+
+async function cargarDashboard() {
+  if (!Huayca.getTokenOrg()) { irALogin(); return; }
+
+  const sesion = Huayca.getSesionOrg();
+  document.getElementById('tituloDash').textContent = sesion?.nombre || 'Mi organización';
+  document.getElementById('nombreOrgHeader').textContent = '👋 ' + (sesion?.nombre || '');
+
+  const cont = document.getElementById('vistaDash');
+  try {
+    const data = await Huayca.apiFetch('/api/organizaciones/mi-dashboard', {
+      headers: { Authorization: 'Bearer ' + Huayca.getTokenOrg() }
+    });
+
+    const link = `${Huayca.BASE_URL}/catalogo.html?org=${encodeURIComponent(sesion?.slug || '')}`;
+    const filas = (data.ultimas_comisiones || []).map((c) => `
+      <tr>
+        <td>${c.pedido_codigo}</td>
+        <td>${Huayca.formatoCLP(c.monto)}</td>
+        <td><span class="estado-pill ${c.estado}">${ESTADO_LABEL[c.estado] || c.estado}</span></td>
+        <td>${Huayca.formatoFecha(c.created_at)}</td>
+      </tr>
+    `).join('');
+
+    cont.innerHTML = `
+      <div class="stat-grid">
+        <div class="stat-tile"><span>Saldo disponible</span><b>${Huayca.formatoCLP(data.saldo_disponible)}</b></div>
+        <div class="stat-tile"><span>Total generado</span><b>${Huayca.formatoCLP(data.resumen.total_generado)}</b></div>
+        <div class="stat-tile"><span>Total pagado</span><b>${Huayca.formatoCLP(data.resumen.total_pagado)}</b></div>
+        <div class="stat-tile"><span>Ventas realizadas</span><b>${data.resumen.ventas_realizadas}</b></div>
+      </div>
+
+      <div class="link-share">
+        <span style="font-size:20px;">🔗</span>
+        <code id="linkCompartir">${link}</code>
+        <button class="btn btn-sm btn-navy" id="btnCopiarLink">Copiar link</button>
+      </div>
+
+      <h3 style="color:var(--navy); font-size:16px; margin-bottom:10px;">Últimas comisiones</h3>
+      ${filas ? `
+        <div style="overflow-x:auto;">
+          <table class="tabla-comisiones">
+            <thead><tr><th>Pedido</th><th>Monto</th><th>Estado</th><th>Fecha</th></tr></thead>
+            <tbody>${filas}</tbody>
+          </table>
+        </div>
+      ` : '<div class="estado-vacio">Todavía no tienes ventas registradas. ¡Comparte tu link!</div>'}
+    `;
+
+    document.getElementById('btnCopiarLink').addEventListener('click', async () => {
+      const btn = document.getElementById('btnCopiarLink');
+      try {
+        await navigator.clipboard.writeText(link);
+        btn.textContent = '¡Copiado!';
+        setTimeout(() => { btn.textContent = 'Copiar link'; }, 1800);
+      } catch (e) {
+        btn.textContent = 'No se pudo copiar';
+      }
+    });
+  } catch (err) {
+    if (err.status === 401 || err.status === 403) { irALogin(); return; }
+    cont.innerHTML = '<div class="estado-vacio">No se pudo cargar tu dashboard. Intenta de nuevo más tarde.</div>';
+  }
+}
+
+document.getElementById('btnLogout').addEventListener('click', irALogin);
+cargarDashboard();
+</script>
+
+</body>
+</html>

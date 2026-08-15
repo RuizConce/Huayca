@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Huayca — Tecnología con propósito</title>
+<meta name="description" content="Compra productos útiles y de calidad mientras apoyas a organizaciones que construyen un mejor futuro.">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="css/huayca.css">
+</head>
+<body>
+
+<div class="anuncio-bar">
+  <div class="container">
+    <span>💚 Cada compra fortalece una organización y mejora la vida de más personas.</span>
+    <span class="der">Juntos hacemos comunidad</span>
+  </div>
+</div>
+
+<header class="site">
+  <div class="nav-principal">
+    <a href="index.html" class="logo">
+      <div class="logo-mark">H</div>
+      <div class="logo-texto"><b>Huayca</b><span>CONECTAMOS COMUNIDADES</span></div>
+    </a>
+    <div class="buscador-header">
+      <form id="buscadorHeaderForm">
+        <input id="buscadorHeaderInput" type="search" placeholder="¿Qué producto buscas?">
+        <button type="submit" aria-label="Buscar">🔍</button>
+      </form>
+    </div>
+    <div class="nav-acciones">
+      <a href="organizacion-registro.html" id="navAccionOrg" class="nav-accion">
+        <span class="icono">🤝</span>
+        <span><span class="txt">Apoya a</span><small>organizaciones</small></span>
+      </a>
+      <a href="organizacion-login.html" class="nav-accion">
+        <span class="icono">👤</span>
+        <span><span class="txt">Iniciar</span><small>sesión</small></span>
+      </a>
+      <a href="catalogo.html" class="nav-accion carrito-wrap">
+        <span class="icono">🛒</span>
+      </a>
+    </div>
+    <button class="menu-toggle" id="menuToggle" aria-label="Menú">☰</button>
+  </div>
+  <div class="categorias-bar">
+    <div class="container">
+      <a href="catalogo.html" class="dropdown-cat">Todas las categorías ▾</a>
+      <a href="catalogo.html?categoria=seguridad">Seguridad</a>
+      <a href="catalogo.html?categoria=salud">Salud</a>
+      <a href="catalogo.html?categoria=familia">Familia</a>
+      <a href="catalogo.html?categoria=movilidad">Movilidad</a>
+      <a href="catalogo.html?categoria=hogar">Hogar</a>
+      <a href="catalogo.html?categoria=tecnologia">Tecnología</a>
+      <a href="catalogo.html?categoria=educacion">Educación y más</a>
+      <a href="catalogo.html?destacado=1" class="cta-ofertas">💚 Ofertas con propósito</a>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <section class="hero">
+    <div class="container">
+      <div>
+        <div class="hero-eyebrow">HUAYCA MARKETPLACE</div>
+        <h1>Tecnología con propósito,<br><span class="destaque cursiva">oportunidades que transforman.</span></h1>
+        <p class="hero-sub">Compra productos útiles y de calidad mientras apoyas a organizaciones que construyen un mejor futuro.</p>
+        <a href="#como-funciona" class="btn btn-navy">Conoce cómo funciona →</a>
+      </div>
+      <div class="hero-visual">
+        <div class="hero-tag">CATÁLOGO<small>REFERENCIAL 2026</small></div>
+        <div class="hero-visual-shape"></div>
+        <div class="hero-visual-grid">
+          <div class="hero-chip">⌚</div>
+          <div class="hero-chip">📍</div>
+          <div class="hero-chip">🔒</div>
+          <div class="hero-chip">💡</div>
+          <div class="hero-chip">🔌</div>
+          <div class="hero-chip">🎒</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="container">
+    <div class="orgtipos">
+      <a href="organizacion-registro.html?tipo=colegio" class="orgtipo-card c1">
+        <span class="icono">🎓</span>
+        <b>Colegios</b>
+        <span>Más recursos para educar y crecer.</span>
+      </a>
+      <a href="organizacion-registro.html?tipo=junta_vecinos" class="orgtipo-card c2">
+        <span class="icono">🏘️</span>
+        <b>Juntas de Vecinos</b>
+        <span>Unidos logramos más para todos.</span>
+      </a>
+      <a href="organizacion-registro.html?tipo=club_deportivo" class="orgtipo-card c3">
+        <span class="icono">🏆</span>
+        <b>Clubes y Deportes</b>
+        <span>Apoyamos tu pasión, impulsamos talentos.</span>
+      </a>
+      <a href="organizacion-registro.html?tipo=otro" class="orgtipo-card c4">
+        <span class="icono">👥</span>
+        <b>Organizaciones Sociales</b>
+        <span>Juntos generamos impacto y bienestar.</span>
+      </a>
+    </div>
+  </div>
+
+  <section class="seccion container">
+    <div class="seccion-header">
+      <h2>Productos destacados</h2>
+      <a href="catalogo.html" class="ver-todos">Ver todos →</a>
+    </div>
+    <div class="productos-carrusel-wrap">
+      <button class="carrusel-flecha izq" id="flechaIzq" aria-label="Anterior">‹</button>
+      <div class="productos-carrusel" id="carruselProductos">
+        <div class="estado-vacio">Cargando productos…</div>
+      </div>
+      <button class="carrusel-flecha der" id="flechaDer" aria-label="Siguiente">›</button>
+    </div>
+  </section>
+
+  <section class="seccion container" id="como-funciona">
+    <div class="impacto-grid">
+      <div class="impacto-card verde">
+        <h3>Apoya a tu organización favorita</h3>
+        <p>Al comprar en Huayca, parte de tu compra va directo a la organización que elijas.</p>
+        <a href="organizaciones.html" class="btn btn-primary" style="align-self:flex-start;">Buscar organización</a>
+        <div class="impacto-visual">🤝</div>
+      </div>
+      <div class="impacto-card lila">
+        <h3>¿Cómo funciona Huayca?</h3>
+        <ul class="pasos-lista">
+          <li><span class="num">1</span> Elige una organización</li>
+          <li><span class="num">2</span> Selecciona productos</li>
+          <li><span class="num">3</span> Comparte y compra</li>
+          <li><span class="num">4</span> La organización recibe su comisión</li>
+        </ul>
+        <p style="font-style:italic; color:var(--navy); font-weight:700; margin-top:6px;">Tú compras. Tu comunidad crece.</p>
+        <a href="organizaciones.html" class="ver-todos">Conoce más sobre Huayca →</a>
+      </div>
+    </div>
+
+    <div class="confianza-grid">
+      <div class="confianza-item">
+        <div class="icono">🛡️</div>
+        <div><b>Compra segura</b><span>Tus datos y pagos están protegidos.</span></div>
+      </div>
+      <div class="confianza-item">
+        <div class="icono">🚚</div>
+        <div><b>Envíos a todo Chile</b><span>Rápidos y confiables.</span></div>
+      </div>
+      <div class="confianza-item">
+        <div class="icono">❤️</div>
+        <div><b>Productos con propósito</b><span>Cada compra genera un impacto real.</span></div>
+      </div>
+      <div class="confianza-item">
+        <div class="icono">👥</div>
+        <div><b>Transparencia total</b><span>Sabes a quién y cómo estás ayudando.</span></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site">
+  <div class="container">
+    <div class="footer-grid">
+      <div>
+        <div class="footer-logo">
+          <div class="logo-mark">H</div>
+          <b>Huayca</b>
+        </div>
+        <p class="tagline">Conectamos comunidades. Tecnología, bienestar y oportunidades que transforman comunidades.</p>
+        <div class="footer-social">
+          <span>📷</span><span>📘</span><span>🎵</span><span>▶️</span>
+        </div>
+      </div>
+      <div>
+        <h4>CATEGORÍAS</h4>
+        <ul>
+          <li><a href="catalogo.html?categoria=seguridad">Seguridad</a></li>
+          <li><a href="catalogo.html?categoria=salud">Salud</a></li>
+          <li><a href="catalogo.html?categoria=familia">Familia</a></li>
+          <li><a href="catalogo.html?categoria=movilidad">Movilidad</a></li>
+          <li><a href="catalogo.html?categoria=hogar">Hogar</a></li>
+          <li><a href="catalogo.html?categoria=tecnologia">Tecnología</a></li>
+          <li><a href="catalogo.html?destacado=1">Ofertas</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>AYUDA</h4>
+        <ul>
+          <li><a href="index.html#como-funciona">Preguntas frecuentes</a></li>
+          <li><a href="index.html#como-funciona">Envíos y devoluciones</a></li>
+          <li><a href="#">Términos y condiciones</a></li>
+          <li><a href="#">Contacto</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>ORGANIZACIONES</h4>
+        <ul>
+          <li><a href="organizacion-registro.html">Registrar organización</a></li>
+          <li><a href="organizacion-login.html">Iniciar sesión</a></li>
+          <li><a href="organizacion-dashboard.html">Mi dashboard</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 Huayca. Todos los derechos reservados.</span>
+      <span class="firma">Juntos hacemos comunidad.</span>
+    </div>
+  </div>
+</footer>
+
+<script src="js/huayca.js"></script>
+<script>
+async function cargarDestacados() {
+  const cont = document.getElementById('carruselProductos');
+  try {
+    const productos = await Huayca.apiFetch('/api/productos');
+    if (!productos.length) {
+      cont.innerHTML = '<div class="estado-vacio">Todavía no hay productos publicados.</div>';
+      return;
+    }
+    cont.innerHTML = productos.slice(0, 10).map((p, i) => `
+      <a class="producto-card" href="producto.html?slug=${encodeURIComponent(p.slug)}">
+        <div class="producto-img-wrap">
+          ${i < 3 ? '<span class="badge badge-nuevo">NUEVO</span>' : (p.precio_normal ? '<span class="badge badge-oferta">OFERTA</span>' : '')}
+          <div class="placeholder-icono">${Huayca.iconoProducto(p)}</div>
+        </div>
+        <div class="producto-info">
+          <h3>${p.nombre}</h3>
+          <div class="producto-precios">
+            <span class="precio-final">${Huayca.formatoCLP(p.precio_final)}</span>
+            ${p.precio_normal ? `<span class="precio-normal">${Huayca.formatoCLP(p.precio_normal)}</span>` : ''}
+          </div>
+          <span class="producto-apoyo">Apoya a tu organización favorita</span>
+        </div>
+      </a>
+    `).join('');
+  } catch (e) {
+    cont.innerHTML = '<div class="estado-vacio">No se pudo cargar el catálogo. Intenta de nuevo más tarde.</div>';
+  }
+}
+cargarDestacados();
+
+document.getElementById('flechaIzq').addEventListener('click', () => {
+  document.getElementById('carruselProductos').scrollBy({ left: -420, behavior: 'smooth' });
+});
+document.getElementById('flechaDer').addEventListener('click', () => {
+  document.getElementById('carruselProductos').scrollBy({ left: 420, behavior: 'smooth' });
+});
+</script>
+
+</body>
+</html>

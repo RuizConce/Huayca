@@ -21,11 +21,35 @@ src/routes/admin.js            → login admin, aprobar/rechazar organizaciones,
 scripts/migrate.js             → corre schema.sql contra la base conectada
 scripts/seed.js                → carga admin + proveedor PROTEGE+ + productos + organización demo
 public/admin.html              → panel de administración (HTML/JS puro, sin build), servido como estático
+public/index.html, catalogo.html, producto.html, checkout.html,
+public/organizaciones.html, organizacion-registro/login/dashboard.html
+                                → frontend público (HTML/JS puro, sin build), servido como estático
+public/css/huayca.css, public/js/huayca.js
+                                → estilos y helpers compartidos por todo el frontend público
 ```
 
 ## Panel de administración
 
 `public/admin.html` es un panel liviano (login, gestión de marcas/proveedores con logo, y sus productos con precio/comisiones) servido directo por Express en `/admin.html` — vive en el mismo dominio que la API, así que no hay problemas de CORS y usa `localStorage` para el token del admin. Consume `POST /api/admin/login`, `GET/POST /api/admin/proveedores` y `GET/POST/PUT /api/admin/productos` (con filtro `?proveedor_id=`).
+
+## Frontend público
+
+HTML/CSS/JS plano, sin build step, mismo patrón que `admin.html` — servido por Express desde `/public` (un solo dominio, sin CORS). `js/huayca.js` centraliza el helper de fetch, el formateo de precios/fechas y la atribución de organización.
+
+- **`index.html`** — home: hero, tipos de organización, productos destacados (`GET /api/productos`), bloque de impacto y confianza.
+- **`catalogo.html`** — grid de productos con filtro por categoría (chips + `?categoria=`) y buscador (`?q=`).
+- **`producto.html?slug=X`** — ficha de producto (`GET /api/productos/:slug`); es el punto de entrada del link compartible de una organización: `.../producto.html?slug=gps-vehicular&org=colegio-los-andes`.
+- **`checkout.html?slug=X`** — formulario de datos + resumen, `POST /api/pedidos`, pantalla de confirmación con el código del pedido. No cobra nada todavía (Mercado Pago queda para cuando se conecte `MP_ACCESS_TOKEN`; ver sección de comisiones más abajo).
+- **`organizaciones.html`** — buscador/listado público de organizaciones aprobadas (`GET /api/organizaciones?q=`), para el botón "Buscar organización".
+- **`organizacion-registro.html` / `organizacion-login.html` / `organizacion-dashboard.html`** — alta, login y dashboard de comisiones + link para compartir, usando las rutas ya documentadas más abajo.
+
+**Atribución del link:** cualquier página que cargue con `?org={slug}` guarda ese slug en `localStorage` (no expira mientras no se borre el storage ni cambie el link, igual que la regla de negocio) y lo reutiliza en catálogo → ficha → checkout, mostrando el banner "Estás comprando a través de...". El backend igual es la fuente de verdad: si el slug no corresponde a una organización aprobada, `POST /api/pedidos` la trata como venta directa sin importar lo que diga el frontend.
+
+**Dos rutas públicas nuevas** que agregué en `src/routes/organizaciones.js` para que el frontend funcionara (no estaban en el esqueleto original):
+- `GET /api/organizaciones?q=texto` — listado de organizaciones aprobadas.
+- `GET /api/organizaciones/:slug` — perfil público de una organización aprobada (nombre, tipo, logo, comuna/región, descripción del proyecto).
+
+No hay carrito multi-producto: el modelo de pedidos es un producto por pedido (así está diseñado el backend), así que "Comprar ahora" lleva directo al checkout de ese producto. El ícono de carrito en el header queda como afordancia visual, sin funcionalidad real, para no prometer algo que el backend no soporta todavía.
 
 ## Cómo se reparte la comisión (lo importante)
 

@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Huayca — Checkout</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="css/huayca.css">
+</head>
+<body>
+
+<div class="anuncio-bar">
+  <div class="container">
+    <span>💚 Cada compra fortalece una organización y mejora la vida de más personas.</span>
+    <span class="der">Juntos hacemos comunidad</span>
+  </div>
+</div>
+
+<header class="site">
+  <div class="nav-principal">
+    <a href="index.html" class="logo">
+      <div class="logo-mark">H</div>
+      <div class="logo-texto"><b>Huayca</b><span>CONECTAMOS COMUNIDADES</span></div>
+    </a>
+    <div class="nav-acciones" style="margin-left:auto;">
+      <a href="organizacion-login.html" class="nav-accion">
+        <span class="icono">👤</span>
+        <span><span class="txt">Iniciar</span><small>sesión</small></span>
+      </a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="container page-header">
+    <div class="breadcrumb"><a href="index.html">Inicio</a> / <span id="breadcrumbProducto">Checkout</span></div>
+    <div id="orgBanner" class="org-banner hidden"></div>
+  </div>
+
+  <div id="vistaCheckout" class="container checkout-grid">
+    <div class="estado-vacio">Cargando…</div>
+  </div>
+
+  <div id="vistaConfirmacion" class="container hidden">
+    <div class="confirmacion">
+      <div class="check">✓</div>
+      <h2>¡Pedido registrado!</h2>
+      <p class="info">Tu pedido quedó registrado y pendiente de pago. Te contactaremos para coordinar el pago y el despacho.</p>
+      <div class="codigo" id="codigoPedido">HUY-000000</div>
+      <p class="info" id="orgAtribuidaInfo"></p>
+      <a href="catalogo.html" class="btn btn-outline-green" style="margin-top:10px;">Seguir comprando</a>
+    </div>
+  </div>
+</main>
+
+<footer class="site">
+  <div class="container footer-bottom" style="border-top:1px solid rgba(255,255,255,0.1); margin-top:0;">
+    <span>© 2026 Huayca. Todos los derechos reservados.</span>
+    <span class="firma">Juntos hacemos comunidad.</span>
+  </div>
+</footer>
+
+<script src="js/huayca.js"></script>
+<script>
+let productoActual = null;
+let cantidadActual = 1;
+
+function renderResumen() {
+  const p = productoActual;
+  const total = Number(p.precio_final) * cantidadActual;
+  return `
+    <div class="resumen-card">
+      <h3>Resumen del pedido</h3>
+      <div class="resumen-producto">
+        <div class="icono">${Huayca.iconoProducto(p)}</div>
+        <div>
+          <b>${p.nombre}</b>
+          <span style="font-size:12px;color:var(--text-soft);">${Huayca.formatoCLP(p.precio_final)} c/u</span>
+        </div>
+      </div>
+      <div class="resumen-linea">
+        <span>Cantidad</span>
+        <span style="display:flex;align-items:center;gap:8px;">
+          <button type="button" id="btnMenos" class="btn btn-sm btn-outline" style="padding:2px 10px;">−</button>
+          <span id="cantidadTexto">${cantidadActual}</span>
+          <button type="button" id="btnMas" class="btn btn-sm btn-outline" style="padding:2px 10px;">+</button>
+        </span>
+      </div>
+      <div class="resumen-linea"><span>Subtotal</span><span id="resumenSubtotal">${Huayca.formatoCLP(total)}</span></div>
+      <div class="resumen-linea total"><span>Total</span><span id="resumenTotal">${Huayca.formatoCLP(total)}</span></div>
+      <p style="font-size:12px;color:var(--text-soft);margin-top:10px;">
+        El pago se coordina después de confirmar el pedido (Mercado Pago) — todavía no se te cobra nada acá.
+      </p>
+    </div>
+  `;
+}
+
+function actualizarResumenTotales() {
+  const total = Number(productoActual.precio_final) * cantidadActual;
+  document.getElementById('cantidadTexto').textContent = cantidadActual;
+  document.getElementById('resumenSubtotal').textContent = Huayca.formatoCLP(total);
+  document.getElementById('resumenTotal').textContent = Huayca.formatoCLP(total);
+}
+
+function wireCantidad() {
+  document.getElementById('btnMenos').addEventListener('click', () => {
+    if (cantidadActual > 1) { cantidadActual--; actualizarResumenTotales(); }
+  });
+  document.getElementById('btnMas').addEventListener('click', () => {
+    if (cantidadActual < productoActual.stock) { cantidadActual++; actualizarResumenTotales(); }
+  });
+}
+
+function renderFormulario() {
+  return `
+    <div class="card-form" style="margin:0;">
+      <h2>Tus datos</h2>
+      <p class="sub">Los necesitamos para coordinar el despacho y avisarte del estado de tu pedido.</p>
+      <form id="formCheckout">
+        <div class="campo"><label>Nombre completo</label><input id="cNombre" required></div>
+        <div class="campo-fila">
+          <div class="campo"><label>Email</label><input id="cEmail" type="email" required></div>
+          <div class="campo"><label>Teléfono</label><input id="cTelefono" type="tel"></div>
+        </div>
+        <div class="campo-fila">
+          <div class="campo"><label>Calle</label><input id="dCalle"></div>
+          <div class="campo"><label>Número</label><input id="dNumero"></div>
+        </div>
+        <div class="campo-fila">
+          <div class="campo"><label>Comuna</label><input id="dComuna"></div>
+          <div class="campo"><label>Región</label><input id="dRegion"></div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block" id="btnConfirmar">Confirmar pedido</button>
+        <div id="checkoutMsg"></div>
+      </form>
+    </div>
+  `;
+}
+
+async function cargarCheckout() {
+  const params = new URLSearchParams(window.location.search);
+  const slug = params.get('slug');
+  const cont = document.getElementById('vistaCheckout');
+
+  if (!slug) {
+    cont.innerHTML = '<div class="estado-vacio">Falta indicar el producto. <a href="catalogo.html">Volver al catálogo</a>.</div>';
+    return;
+  }
+
+  try {
+    productoActual = await Huayca.apiFetch('/api/productos/' + encodeURIComponent(slug));
+    document.getElementById('breadcrumbProducto').textContent = 'Checkout · ' + productoActual.nombre;
+
+    cont.innerHTML = renderFormulario() + renderResumen();
+    wireCantidad();
+
+    document.getElementById('formCheckout').addEventListener('submit', enviarPedido);
+  } catch (e) {
+    cont.innerHTML = '<div class="estado-vacio">No encontramos este producto. <a href="catalogo.html">Volver al catálogo</a>.</div>';
+  }
+}
+
+async function enviarPedido(e) {
+  e.preventDefault();
+  const msg = document.getElementById('checkoutMsg');
+  const btn = document.getElementById('btnConfirmar');
+  msg.innerHTML = '';
+
+  const nombre = document.getElementById('cNombre').value.trim();
+  const email = document.getElementById('cEmail').value.trim();
+  if (!nombre || !email) {
+    msg.innerHTML = '<div class="form-msg error">Nombre y email son obligatorios.</div>';
+    return;
+  }
+
+  const orgSlug = Huayca.getOrgActivaSlug();
+  const payload = {
+    producto_id: productoActual.id,
+    cantidad: cantidadActual,
+    cliente: {
+      nombre,
+      email,
+      telefono: document.getElementById('cTelefono').value.trim() || undefined
+    },
+    direccion_envio: {
+      calle: document.getElementById('dCalle').value.trim(),
+      numero: document.getElementById('dNumero').value.trim(),
+      comuna: document.getElementById('dComuna').value.trim(),
+      region: document.getElementById('dRegion').value.trim()
+    }
+  };
+  if (orgSlug) payload.organizacion_slug = orgSlug;
+
+  btn.disabled = true;
+  btn.textContent = 'Enviando…';
+  try {
+    const resultado = await Huayca.apiFetch('/api/pedidos', { method: 'POST', body: JSON.stringify(payload) });
+    document.getElementById('codigoPedido').textContent = resultado.codigo;
+    document.getElementById('orgAtribuidaInfo').textContent = resultado.organizacion_atribuida
+      ? `Esta compra apoya a ${resultado.organizacion_atribuida}.`
+      : '';
+    document.getElementById('vistaCheckout').classList.add('hidden');
+    document.getElementById('vistaConfirmacion').classList.remove('hidden');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } catch (err) {
+    msg.innerHTML = `<div class="form-msg error">${err.message}</div>`;
+    btn.disabled = false;
+    btn.textContent = 'Confirmar pedido';
+  }
+}
+
+cargarCheckout();
+Huayca.pintarBannerOrg('orgBanner');
+</script>
+
+</body>
+</html>
