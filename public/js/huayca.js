@@ -152,7 +152,19 @@ const Huayca = (() => {
       if (der && h.mensaje_franja_derecha) der.textContent = h.mensaje_franja_derecha;
       if (h.logo_url) {
         document.querySelectorAll('.logo-mark').forEach((el) => {
-          el.innerHTML = `<img src="${h.logo_url}" alt="Huayca" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;">`;
+          const original = el.innerHTML; // el ícono "H" por defecto, para volver a él si la imagen falla
+          const img = document.createElement('img');
+          img.alt = 'Huayca';
+          img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:inherit;';
+          // El onerror se engancha ANTES de asignar src, para no perder el
+          // evento si la carga falla de inmediato (ej. data: URI inválido).
+          img.onerror = () => {
+            console.error('[Huayca] El logo configurado no se pudo cargar; se mantiene el ícono por defecto.');
+            el.innerHTML = original;
+          };
+          img.src = h.logo_url;
+          el.innerHTML = '';
+          el.appendChild(img);
         });
       }
     }
@@ -262,6 +274,17 @@ const Huayca = (() => {
         const esUrl = /^https?:\/\//.test(img) || img.startsWith('/') || img.startsWith('data:image/');
         return `<div class="hero-slide">${esUrl ? `<img src="${img}" alt="">` : `<span class="hero-slide-icono">${img}</span>`}</div>`;
       }).join('');
+      // Si alguna foto falla al cargar, cae a un ícono en vez de dejar el
+      // recuadro roto.
+      track.querySelectorAll('.hero-slide img').forEach((imgEl) => {
+        imgEl.onerror = () => {
+          console.error('[Huayca] Una imagen del carrusel del hero no se pudo cargar.');
+          const span = document.createElement('span');
+          span.className = 'hero-slide-icono';
+          span.textContent = '🖼️';
+          imgEl.replaceWith(span);
+        };
+      });
     }
     iniciarCarruselHero();
   }
@@ -327,7 +350,17 @@ const Huayca = (() => {
         if (banner.boton_link) btn.setAttribute('href', banner.boton_link);
       }
       if (visual && banner.imagen_url) {
-        visual.innerHTML = `<img src="${banner.imagen_url}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;">`;
+        const original = visual.innerHTML; // el ícono 🤝 por defecto
+        const img = document.createElement('img');
+        img.alt = '';
+        img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:inherit;';
+        img.onerror = () => {
+          console.error('[Huayca] La imagen del banner no se pudo cargar; se mantiene el ícono por defecto.');
+          visual.innerHTML = original;
+        };
+        img.src = banner.imagen_url;
+        visual.innerHTML = '';
+        visual.appendChild(img);
       }
     }
 

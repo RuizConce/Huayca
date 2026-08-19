@@ -23,7 +23,17 @@ app.use(express.json({ limit: '8mb' }));
 // Panel de administración estático (HTML/JS puro, sin build step):
 // queda disponible en /admin.html, sirviéndose desde el mismo dominio que
 // la API para no tener que lidiar con CORS.
-app.use(express.static('public'));
+// no-cache (no no-store) en HTML/JS/CSS: cada deploy nuevo se sirve al
+// toque sin depender de que el navegador o algún proxy/CDN de por medio
+// decida cuándo revalidar — sigue permitiendo 304 vía ETag, así que no
+// resigna el cacheo, solo obliga a chequear frescura en cada carga.
+app.use(express.static('public', {
+  setHeaders: (res, filePath) => {
+    if (/\.(html|js|css)$/.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-cache');
+    }
+  }
+}));
 
 app.get('/', (req, res) => {
   res.json({ ok: true, servicio: 'Huayca API', version: '1.0.0' });
