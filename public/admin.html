@@ -60,6 +60,12 @@
   .precio-final-preview { background: #fff7ec; border-radius: 6px; padding: 10px; margin-top: 10px; font-size: 13px; }
   .precio-final-preview b { color: #e8801e; font-size: 16px; }
 
+  .preview-img { width: 44px; height: 44px; border-radius: 8px; background: #f4f5f2; object-fit: contain; border: 1px solid #eee; flex-shrink: 0; }
+  .con-preview { display: flex; align-items: center; gap: 10px; }
+  .con-preview input { flex: 1; margin-top: 0; }
+  .ayuda-medida { display: block; font-size: 12px; color: #999; margin-top: 4px; }
+  .ayuda-medida .dim-real { color: #1e8e3e; font-weight: 600; }
+
   #errorBanner { background: #fdeeee; color: #c0392b; padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; font-size: 13px; }
 </style>
 </head>
@@ -124,7 +130,11 @@
     <label>Teléfono de contacto</label>
     <input id="marcaTelefono" placeholder="Opcional">
     <label>URL del logo</label>
-    <input id="marcaLogo" placeholder="https://...">
+    <div class="con-preview">
+      <img class="preview-img" id="previewMarcaLogo" src="" alt="">
+      <input id="marcaLogo" placeholder="https://..." oninput="actualizarPreviewImagen('marcaLogo','previewMarcaLogo','dimMarcaLogo')">
+    </div>
+    <small class="ayuda-medida" id="dimMarcaLogo">Recomendado: 300×300px, PNG con fondo transparente</small>
     <div class="modal-buttons">
       <button class="btn-secondary" onclick="cerrarModalMarca()">Cancelar</button>
       <button class="btn-primary" onclick="guardarMarca()">Guardar</button>
@@ -142,7 +152,11 @@
     <label>Descripción</label>
     <textarea id="productoDescripcion"></textarea>
     <label>URL de imagen principal</label>
-    <input id="productoImagen" placeholder="https://...">
+    <div class="con-preview">
+      <img class="preview-img" id="previewProductoImagen" src="" alt="">
+      <input id="productoImagen" placeholder="https://..." oninput="actualizarPreviewImagen('productoImagen','previewProductoImagen','dimProductoImagen')">
+    </div>
+    <small class="ayuda-medida" id="dimProductoImagen">Recomendado: 800×800px, foto cuadrada, fondo blanco o transparente</small>
     <label>Precio proveedor ($)</label>
     <input id="productoPrecioProveedor" type="number" oninput="actualizarPreview()">
     <label>Comisión afiliado ($)</label>
@@ -280,6 +294,7 @@ function abrirModalMarca() {
   document.getElementById('modalMarcaTitulo').textContent = 'Nueva marca';
   document.getElementById('marcaId').value = '';
   ['marcaNombre','marcaRazonSocial','marcaEmail','marcaTelefono','marcaLogo'].forEach(id => document.getElementById(id).value = '');
+  actualizarPreviewImagen('marcaLogo', 'previewMarcaLogo', 'dimMarcaLogo');
   document.getElementById('modalMarca').classList.remove('hidden');
 }
 function cerrarModalMarca() { document.getElementById('modalMarca').classList.add('hidden'); }
@@ -359,6 +374,7 @@ function abrirModalProducto() {
   document.getElementById('productoStock').value = 0;
   document.getElementById('productoEstado').value = 'borrador';
   actualizarPreview();
+  actualizarPreviewImagen('productoImagen', 'previewProductoImagen', 'dimProductoImagen');
   document.getElementById('modalProducto').classList.remove('hidden');
 }
 
@@ -375,10 +391,30 @@ function editarProducto(p) {
   document.getElementById('productoStock').value = p.stock || 0;
   document.getElementById('productoEstado').value = p.estado || 'borrador';
   actualizarPreview();
+  actualizarPreviewImagen('productoImagen', 'previewProductoImagen', 'dimProductoImagen');
   document.getElementById('modalProducto').classList.remove('hidden');
 }
 
 function cerrarModalProducto() { document.getElementById('modalProducto').classList.add('hidden'); }
+
+// Preview + dimensiones reales de una imagen (solo referencia, no bloquea
+// el guardado). Nombre distinto del actualizarPreview() de más abajo, que
+// ya existía acá para el cálculo del precio final.
+function actualizarPreviewImagen(inputId, imgId, hintId) {
+  const url = document.getElementById(inputId).value.trim();
+  const img = document.getElementById(imgId);
+  img.src = url;
+  img.style.visibility = url ? 'visible' : 'hidden';
+  const hint = document.getElementById(hintId);
+  if (!hint) return;
+  if (hint.dataset.base === undefined) hint.dataset.base = hint.textContent;
+  const base = hint.dataset.base;
+  if (!url) { hint.innerHTML = base; return; }
+  img.onload = () => {
+    hint.innerHTML = `${base} — <span class="dim-real">imagen actual: ${img.naturalWidth}×${img.naturalHeight}px</span>`;
+  };
+  img.onerror = () => { hint.innerHTML = base; };
+}
 
 function actualizarPreview() {
   const pp = Number(document.getElementById('productoPrecioProveedor').value) || 0;

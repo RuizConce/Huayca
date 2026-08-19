@@ -177,6 +177,95 @@ const Huayca = (() => {
     }
   }
 
+  // ---------- Carrusel del hero ----------
+  // Autoplay (4.5s) + flechas + puntos + swipe táctil. Con 0 o 1 imagen no
+  // hay controles: 0 muestra un placeholder fijo, 1 muestra esa sola imagen
+  // fija (ver construirSlidesHero). Se re-inicializa cada vez que se
+  // reconstruyen los slides (init de la página con el fallback del HTML, y
+  // de nuevo si /api/contenido trae imágenes propias).
+  let heroCarruselIntervalId = null;
+
+  function iniciarCarruselHero() {
+    const carrusel = document.getElementById('heroCarrusel');
+    const track = document.getElementById('heroCarruselTrack');
+    if (!carrusel || !track) return;
+
+    if (heroCarruselIntervalId) {
+      clearInterval(heroCarruselIntervalId);
+      heroCarruselIntervalId = null;
+    }
+
+    const slides = track.querySelectorAll('.hero-slide');
+    const total = slides.length;
+    const multiple = total > 1;
+    carrusel.classList.toggle('un-solo', !multiple);
+
+    const dotsCont = document.getElementById('heroCarruselDots');
+    if (dotsCont) {
+      dotsCont.innerHTML = multiple
+        ? Array.from({ length: total }, (_, i) => `<button type="button" data-i="${i}" aria-label="Ir a la imagen ${i + 1}"></button>`).join('')
+        : '';
+    }
+
+    let indice = 0;
+    function irA(i) {
+      indice = ((i % total) + total) % total;
+      track.style.transform = `translateX(-${indice * 100}%)`;
+      if (dotsCont) {
+        dotsCont.querySelectorAll('button').forEach((b, idx) => b.classList.toggle('activo', idx === indice));
+      }
+    }
+    irA(0);
+
+    if (!multiple) return; // nada que autoavanzar/deslizar con 0 o 1 imagen
+
+    function reiniciarAutoplay() {
+      if (heroCarruselIntervalId) clearInterval(heroCarruselIntervalId);
+      heroCarruselIntervalId = setInterval(() => irA(indice + 1), 4500);
+    }
+
+    const flechaIzq = document.getElementById('heroFlechaIzq');
+    const flechaDer = document.getElementById('heroFlechaDer');
+    if (flechaIzq) flechaIzq.onclick = () => { irA(indice - 1); reiniciarAutoplay(); };
+    if (flechaDer) flechaDer.onclick = () => { irA(indice + 1); reiniciarAutoplay(); };
+    if (dotsCont) {
+      dotsCont.querySelectorAll('button').forEach((b) => {
+        b.onclick = () => { irA(Number(b.dataset.i)); reiniciarAutoplay(); };
+      });
+    }
+
+    // Swipe táctil (móvil)
+    let touchStartX = null;
+    track.ontouchstart = (e) => { touchStartX = e.touches[0].clientX; };
+    track.ontouchend = (e) => {
+      if (touchStartX === null) return;
+      const delta = e.changedTouches[0].clientX - touchStartX;
+      if (Math.abs(delta) > 40) irA(indice + (delta < 0 ? 1 : -1));
+      touchStartX = null;
+      reiniciarAutoplay();
+    };
+
+    reiniciarAutoplay();
+  }
+
+  // Reconstruye los slides a partir de hero.imagenes (mezcla emoji/texto
+  // corto y URLs de imagen indistintamente) y reinicia el carrusel. Un
+  // array vacío no deja el hero en blanco: muestra un placeholder limpio.
+  function construirSlidesHero(imagenes) {
+    const track = document.getElementById('heroCarruselTrack');
+    if (!track) return;
+    const lista = imagenes.filter(Boolean);
+    if (!lista.length) {
+      track.innerHTML = '<div class="hero-slide"><span class="hero-slide-icono">🖼️</span></div>';
+    } else {
+      track.innerHTML = lista.map((img) => {
+        const esUrl = /^https?:\/\//.test(img) || img.startsWith('/') || img.startsWith('data:image/');
+        return `<div class="hero-slide">${esUrl ? `<img src="${img}" alt="">` : `<span class="hero-slide-icono">${img}</span>`}</div>`;
+      }).join('');
+    }
+    iniciarCarruselHero();
+  }
+
   // Hero, tarjetas de tipo de organización, banner "apoya a tu organización"
   // y "cómo funciona": solo existen en index.html. Se llama automáticamente
   // (ver DOMContentLoaded al final) cuando el DOM tiene #heroTitulo, así que
@@ -199,13 +288,11 @@ const Huayca = (() => {
       }
       const badge = document.getElementById('heroBadge');
       if (badge && hero.badge_texto) badge.textContent = hero.badge_texto;
-      const grid = document.getElementById('heroImagenes');
-      if (grid && Array.isArray(hero.imagenes) && hero.imagenes.length) {
-        grid.innerHTML = hero.imagenes.slice(0, 6).map((img) => {
-          const esUrl = /^https?:\/\//.test(img) || img.startsWith('/');
-          return `<div class="hero-chip">${esUrl ? `<img src="${img}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:16px;">` : img}</div>`;
-        }).join('');
-      }
+      // hero.imagenes puede venir como array vacío (el admin borró todas las
+      // fotos) — es una respuesta válida y distinta de "no vino el campo":
+      // ahí sí hay que reemplazar el fallback por el placeholder, por eso se
+      // chequea Array.isArray en vez de truthiness del length.
+      if (Array.isArray(hero.imagenes)) construirSlidesHero(hero.imagenes);
     }
 
     const cards = contenido.organizaciones_cards && contenido.organizaciones_cards.tarjetas;
@@ -291,12 +378,15 @@ const Huayca = (() => {
     getOrgActivaSlug, getOrgActivaDatos, limpiarOrgActiva, pintarBannerOrg,
     guardarSesionOrg, getTokenOrg, getSesionOrg, cerrarSesionOrg,
     iconoProducto, inicializarHeader,
-    cargarContenidoSitio, aplicarHeaderFooter, aplicarContenidoHome
+    cargarContenidoSitio, aplicarHeaderFooter, aplicarContenidoHome, iniciarCarruselHero
   };
 })();
 
 document.addEventListener('DOMContentLoaded', async () => {
   Huayca.inicializarHeader();
+  // El carrusel del hero arranca ya con el fallback escrito en el HTML, sin
+  // esperar la red — si /api/contenido trae fotos propias, se reconstruye.
+  Huayca.iniciarCarruselHero();
   const contenido = await Huayca.cargarContenidoSitio();
   Huayca.aplicarHeaderFooter(contenido);
   if (document.getElementById('heroTitulo')) Huayca.aplicarContenidoHome(contenido);

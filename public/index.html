@@ -72,13 +72,21 @@
       <div class="hero-visual">
         <div class="hero-tag" id="heroBadge">CATÁLOGO REFERENCIAL 2026</div>
         <div class="hero-visual-shape"></div>
-        <div class="hero-visual-grid" id="heroImagenes">
-          <div class="hero-chip">⌚</div>
-          <div class="hero-chip">📍</div>
-          <div class="hero-chip">🔒</div>
-          <div class="hero-chip">💡</div>
-          <div class="hero-chip">🔌</div>
-          <div class="hero-chip">🎒</div>
+        <!-- Fallback si /api/contenido no carga: mismo set de íconos que el
+             default de la base, ya interactivo (autoplay/flechas/puntos) sin
+             esperar la red. Si hero.imagenes trae fotos reales, se reemplaza. -->
+        <div class="hero-carrusel" id="heroCarrusel">
+          <div class="hero-carrusel-track" id="heroCarruselTrack">
+            <div class="hero-slide"><span class="hero-slide-icono">⌚</span></div>
+            <div class="hero-slide"><span class="hero-slide-icono">📍</span></div>
+            <div class="hero-slide"><span class="hero-slide-icono">🔒</span></div>
+            <div class="hero-slide"><span class="hero-slide-icono">💡</span></div>
+            <div class="hero-slide"><span class="hero-slide-icono">🔌</span></div>
+            <div class="hero-slide"><span class="hero-slide-icono">🎒</span></div>
+          </div>
+          <button type="button" class="hero-carrusel-flecha izq" id="heroFlechaIzq" aria-label="Imagen anterior">‹</button>
+          <button type="button" class="hero-carrusel-flecha der" id="heroFlechaDer" aria-label="Imagen siguiente">›</button>
+          <div class="hero-carrusel-dots" id="heroCarruselDots"></div>
         </div>
       </div>
     </div>

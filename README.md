@@ -60,8 +60,18 @@ Los textos e imágenes del home (franja superior, hero, tarjetas de tipo de orga
 - **`PUT /api/admin/contenido/:clave`** — admin, reemplaza el valor completo de esa clave (no hace merge parcial). Valida que `:clave` sea una de las 6 conocidas.
 - **`public/admin-contenido.html`** — un formulario por clave, con su propio botón "Guardar cambios" (reutiliza el token de admin en `localStorage`, igual que `admin.html`). Enlazado desde el header de `admin.html` una vez logueado.
 - **Nunca rompe el sitio**: si `GET /api/contenido` falla (red, DB caída) o una clave/campo específico viene vacío, el frontend (`Huayca.aplicarHeaderFooter` / `Huayca.aplicarContenidoHome`) simplemente no toca ese elemento — el texto/imagen que ya está escrito a mano en el HTML queda como fallback. Probado explícitamente abortando la petición y confirmando que el hero se sigue viendo con su contenido por defecto.
-- El campo `hero.imagenes` acepta tanto emojis/texto corto (se muestran tal cual, como ahora) como URLs (`http(s)://` o que empiecen con `/`, se renderizan como `<img>`) — así no hace falta esperar a tener fotos reales para que el campo funcione.
+- El campo `hero.imagenes` acepta emojis/texto corto (se muestran tal cual) o URLs (`http(s)://`, rutas que empiecen con `/`, o `data:image/...`), que se renderizan como `<img>` — así no hace falta esperar a tener fotos reales para que el campo funcione.
 - El franja superior y el footer (tagline + redes sociales) se aplican en **todas** las páginas públicas, no solo en el home; el resto de los bloques (hero, tarjetas, banner, cómo funciona) son exclusivos de `index.html`.
+
+### Hero como carrusel
+
+`hero.imagenes` maneja el carrusel del hero (`Huayca.iniciarCarruselHero()` / `construirSlidesHero()` en `js/huayca.js`), pensado para fotos de producto (idealmente PNG con fondo transparente) flotando sobre la forma orgánica verde:
+
+- Autoplay cada 4.5s, flechas prev/next, puntos indicadores, swipe táctil en móvil, transición deslizante suave.
+- 1 sola imagen → queda fija, sin flechas ni puntos (no tiene sentido carrusel de un elemento).
+- 0 imágenes (el admin borró todas) → un placeholder limpio (ícono), nunca deja el espacio en blanco.
+- El carrusel arranca interactivo con el fallback de 6 íconos ya escrito en el HTML **antes** de esperar la respuesta de `/api/contenido` — si la llamada falla, ese fallback sigue funcionando (autoplay incluido) tal cual.
+- Cada campo de imagen del panel (header, hero, tarjetas de organización, banner) muestra la medida recomendada debajo del input y, si la imagen carga, sus dimensiones reales como referencia (nunca bloquea el guardado). Mismo patrón aplicado al logo de marca y a la imagen principal de producto en `admin.html`.
 
 No hay carrito multi-producto: el modelo de pedidos es un producto por pedido (así está diseñado el backend), así que "Comprar ahora" lleva directo al checkout de ese producto. El ícono de carrito en el header queda como afordancia visual, sin funcionalidad real, para no prometer algo que el backend no soporta todavía.
 
