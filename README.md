@@ -20,12 +20,14 @@ src/routes/tickets.js          → devoluciones/garantías
 src/routes/admin.js            → login admin, aprobar/rechazar organizaciones, CRUD proveedores/productos/categorías
 scripts/migrate.js             → corre schema.sql contra la base conectada
 scripts/seed.js                → carga admin + proveedor PROTEGE+ + productos + organización demo
-public/admin.html              → panel de administración (HTML/JS puro, sin build), servido como estático
+public/admin.html               → panel de administración (HTML/JS puro, sin build), servido como estático
+public/admin-contenido.html     → panel de contenido del sitio (CMS liviano), enlazado desde admin.html
 public/index.html, catalogo.html, producto.html, checkout.html,
 public/organizaciones.html, organizacion-registro/login/dashboard.html
-                                → frontend público (HTML/JS puro, sin build), servido como estático
+                                 → frontend público (HTML/JS puro, sin build), servido como estático
 public/css/huayca.css, public/js/huayca.js
-                                → estilos y helpers compartidos por todo el frontend público
+                                 → estilos y helpers compartidos por todo el frontend público
+src/routes/contenido.js         → GET /api/contenido (público, combinado)
 ```
 
 ## Panel de administración
@@ -48,6 +50,18 @@ HTML/CSS/JS plano, sin build step, mismo patrón que `admin.html` — servido po
 **Dos rutas públicas nuevas** que agregué en `src/routes/organizaciones.js` para que el frontend funcionara (no estaban en el esqueleto original):
 - `GET /api/organizaciones?q=texto` — listado de organizaciones aprobadas.
 - `GET /api/organizaciones/:slug` — perfil público de una organización aprobada (nombre, tipo, logo, comuna/región, descripción del proyecto).
+
+## Contenido del sitio (CMS liviano)
+
+Los textos e imágenes del home (franja superior, hero, tarjetas de tipo de organización, banner "apoya a tu organización", "cómo funciona" y footer) son editables desde el panel de admin, sin tocar código.
+
+- **Tabla** `contenido_sitio` (`clave` VARCHAR PK, `valor` JSON): una fila por bloque (`header`, `hero`, `organizaciones_cards`, `banner_apoya`, `como_funciona`, `footer`). Se crea e inicializa sola vía la misma auto-migración del server (`src/db/migrate.js`): si la tabla no existe la crea, y **siempre** intenta sembrar las 6 claves por defecto con `INSERT IGNORE` — no pisa nunca una fila que el admin ya haya editado, así que es seguro que corra en cada boot.
+- **`GET /api/contenido`** — pública, sin auth. Devuelve las 6 claves combinadas en un solo objeto. El frontend la llama una vez por carga de página (`Huayca.cargarContenidoSitio()` en `js/huayca.js`, memoizada).
+- **`PUT /api/admin/contenido/:clave`** — admin, reemplaza el valor completo de esa clave (no hace merge parcial). Valida que `:clave` sea una de las 6 conocidas.
+- **`public/admin-contenido.html`** — un formulario por clave, con su propio botón "Guardar cambios" (reutiliza el token de admin en `localStorage`, igual que `admin.html`). Enlazado desde el header de `admin.html` una vez logueado.
+- **Nunca rompe el sitio**: si `GET /api/contenido` falla (red, DB caída) o una clave/campo específico viene vacío, el frontend (`Huayca.aplicarHeaderFooter` / `Huayca.aplicarContenidoHome`) simplemente no toca ese elemento — el texto/imagen que ya está escrito a mano en el HTML queda como fallback. Probado explícitamente abortando la petición y confirmando que el hero se sigue viendo con su contenido por defecto.
+- El campo `hero.imagenes` acepta tanto emojis/texto corto (se muestran tal cual, como ahora) como URLs (`http(s)://` o que empiecen con `/`, se renderizan como `<img>`) — así no hace falta esperar a tener fotos reales para que el campo funcione.
+- El franja superior y el footer (tagline + redes sociales) se aplican en **todas** las páginas públicas, no solo en el home; el resto de los bloques (hero, tarjetas, banner, cómo funciona) son exclusivos de `index.html`.
 
 No hay carrito multi-producto: el modelo de pedidos es un producto por pedido (así está diseñado el backend), así que "Comprar ahora" lleva directo al checkout de ese producto. El ícono de carrito en el header queda como afordancia visual, sin funcionalidad real, para no prometer algo que el backend no soporta todavía.
 

@@ -67,7 +67,10 @@
 
 <header>
   <h1>🤝 Huayca — Admin</h1>
-  <button id="btnLogout" class="hidden" onclick="logout()">Cerrar sesión</button>
+  <div style="display:flex; align-items:center; gap:10px;">
+    <a id="linkContenido" href="admin-contenido.html" class="hidden" style="color:#ffffffcc; font-size:13px;">🖋️ Contenido del sitio</a>
+    <button id="btnLogout" class="hidden" onclick="logout()">Cerrar sesión</button>
+  </div>
 </header>
 
 <main>
@@ -203,6 +206,7 @@ function logout() {
   localStorage.removeItem('huayca_admin_token');
   document.getElementById('app').classList.add('hidden');
   document.getElementById('btnLogout').classList.add('hidden');
+  document.getElementById('linkContenido').classList.add('hidden');
   document.getElementById('loginBox').classList.remove('hidden');
 }
 
@@ -210,6 +214,7 @@ function mostrarApp() {
   document.getElementById('loginBox').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
   document.getElementById('btnLogout').classList.remove('hidden');
+  document.getElementById('linkContenido').classList.remove('hidden');
   cargarMarcas();
 }
 

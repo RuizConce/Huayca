@@ -125,6 +125,139 @@ const Huayca = (() => {
     return encontrado ? encontrado.icono : '📦';
   }
 
+  // ---------- Contenido editable del sitio (CMS liviano) ----------
+  // GET /api/contenido se llama una sola vez por carga de página (memoizado
+  // en esta promesa) y nunca debe tumbar el sitio: si falla, se resuelve a
+  // null y los que llaman aplicarHeaderFooter/aplicarContenidoHome
+  // simplemente dejan el HTML tal como está (el fallback ya escrito a mano).
+  let contenidoSitioPromise = null;
+  function cargarContenidoSitio() {
+    if (!contenidoSitioPromise) {
+      contenidoSitioPromise = apiFetch('/api/contenido').catch(() => null);
+    }
+    return contenidoSitioPromise;
+  }
+
+  // Franja superior, logo y footer (tagline + redes): presentes en todas las
+  // páginas públicas. Cada campo se pisa solo si vino con contenido; si el
+  // fetch falló o una clave/campo no vino, el HTML por defecto queda intacto.
+  function aplicarHeaderFooter(contenido) {
+    if (!contenido) return;
+
+    const h = contenido.header;
+    if (h) {
+      const izq = document.getElementById('franjaIzq');
+      const der = document.getElementById('franjaDer');
+      if (izq && h.mensaje_franja_izquierda) izq.textContent = '💚 ' + h.mensaje_franja_izquierda;
+      if (der && h.mensaje_franja_derecha) der.textContent = h.mensaje_franja_derecha;
+      if (h.logo_url) {
+        document.querySelectorAll('.logo-mark').forEach((el) => {
+          el.innerHTML = `<img src="${h.logo_url}" alt="Huayca" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;">`;
+        });
+      }
+    }
+
+    const f = contenido.footer;
+    if (f) {
+      const tagline = document.getElementById('footerTagline');
+      if (tagline && (f.tagline || f.descripcion)) {
+        tagline.textContent = [f.tagline, f.descripcion].filter(Boolean).join(' ');
+      }
+      const social = document.getElementById('footerSocial');
+      if (social && f.redes_sociales) {
+        const ICONOS_RED = { instagram: '📷', facebook: '📘', tiktok: '🎵', youtube: '▶️' };
+        social.innerHTML = Object.keys(ICONOS_RED).map((red) => {
+          const url = f.redes_sociales[red];
+          const icono = ICONOS_RED[red];
+          return url
+            ? `<a href="${url}" target="_blank" rel="noopener" style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;font-size:14px;">${icono}</a>`
+            : `<span>${icono}</span>`;
+        }).join('');
+      }
+    }
+  }
+
+  // Hero, tarjetas de tipo de organización, banner "apoya a tu organización"
+  // y "cómo funciona": solo existen en index.html. Se llama automáticamente
+  // (ver DOMContentLoaded al final) cuando el DOM tiene #heroTitulo, así que
+  // el resto de páginas no paga ningún costo ni necesita llamarla a mano.
+  function aplicarContenidoHome(contenido) {
+    if (!contenido) return;
+
+    const hero = contenido.hero;
+    if (hero) {
+      const tp = document.getElementById('heroTituloPrincipal');
+      const td = document.getElementById('heroTituloDestacado');
+      if (tp && hero.titulo) tp.textContent = hero.titulo;
+      if (td && hero.subtitulo_destacado) td.textContent = hero.subtitulo_destacado;
+      const sub = document.getElementById('heroDescripcion');
+      if (sub && hero.texto_descriptivo) sub.textContent = hero.texto_descriptivo;
+      const btn = document.getElementById('heroBoton');
+      if (btn) {
+        if (hero.texto_boton) btn.textContent = hero.texto_boton + ' →';
+        if (hero.link_boton) btn.setAttribute('href', hero.link_boton);
+      }
+      const badge = document.getElementById('heroBadge');
+      if (badge && hero.badge_texto) badge.textContent = hero.badge_texto;
+      const grid = document.getElementById('heroImagenes');
+      if (grid && Array.isArray(hero.imagenes) && hero.imagenes.length) {
+        grid.innerHTML = hero.imagenes.slice(0, 6).map((img) => {
+          const esUrl = /^https?:\/\//.test(img) || img.startsWith('/');
+          return `<div class="hero-chip">${esUrl ? `<img src="${img}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:16px;">` : img}</div>`;
+        }).join('');
+      }
+    }
+
+    const cards = contenido.organizaciones_cards && contenido.organizaciones_cards.tarjetas;
+    if (Array.isArray(cards) && cards.length) {
+      const COLOR_CLASE = { verde: 'c1', naranjo: 'c2', azul: 'c3' };
+      cards.slice(0, 4).forEach((card, i) => {
+        const el = document.querySelector(`.orgtipo-card[data-tarjeta="${i}"]`);
+        if (!el) return;
+        if (card.color && COLOR_CLASE[card.color]) el.className = `orgtipo-card ${COLOR_CLASE[card.color]}`;
+        if (card.imagen_url) {
+          el.style.backgroundImage = `linear-gradient(180deg, rgba(13,43,78,0.15), rgba(13,43,78,0.55)), url('${card.imagen_url}')`;
+          el.style.backgroundSize = 'cover';
+          el.style.backgroundPosition = 'center';
+        }
+        const b = el.querySelector('b');
+        const span = el.querySelector('span:last-of-type');
+        if (b && card.titulo) b.textContent = card.titulo;
+        if (span && card.texto) span.textContent = card.texto;
+      });
+    }
+
+    const banner = contenido.banner_apoya;
+    if (banner) {
+      const t = document.getElementById('bannerTitulo');
+      const p = document.getElementById('bannerTexto');
+      const btn = document.getElementById('bannerBoton');
+      const visual = document.getElementById('bannerVisual');
+      if (t && banner.titulo) t.textContent = banner.titulo;
+      if (p && banner.texto) p.textContent = banner.texto;
+      if (btn) {
+        if (banner.boton_texto) btn.textContent = banner.boton_texto;
+        if (banner.boton_link) btn.setAttribute('href', banner.boton_link);
+      }
+      if (visual && banner.imagen_url) {
+        visual.innerHTML = `<img src="${banner.imagen_url}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;">`;
+      }
+    }
+
+    const cf = contenido.como_funciona;
+    if (cf) {
+      const lista = document.getElementById('pasosLista');
+      if (lista && Array.isArray(cf.pasos) && cf.pasos.length) {
+        lista.innerHTML = cf.pasos.map((paso) => {
+          const num = (paso.numero || '').replace(/^0+/, '') || '•';
+          return `<li><span class="num">${num}</span> ${paso.titulo || ''}</li>`;
+        }).join('');
+      }
+      const frase = document.getElementById('fraseDestacada');
+      if (frase && cf.frase_destacada) frase.textContent = cf.frase_destacada;
+    }
+  }
+
   // ---------- Header: buscador + menú móvil ----------
   function inicializarHeader() {
     const form = document.getElementById('buscadorHeaderForm');
@@ -157,8 +290,14 @@ const Huayca = (() => {
     BASE_URL, apiFetch, formatoCLP, formatoFecha,
     getOrgActivaSlug, getOrgActivaDatos, limpiarOrgActiva, pintarBannerOrg,
     guardarSesionOrg, getTokenOrg, getSesionOrg, cerrarSesionOrg,
-    iconoProducto, inicializarHeader
+    iconoProducto, inicializarHeader,
+    cargarContenidoSitio, aplicarHeaderFooter, aplicarContenidoHome
   };
 })();
 
-document.addEventListener('DOMContentLoaded', () => Huayca.inicializarHeader());
+document.addEventListener('DOMContentLoaded', async () => {
+  Huayca.inicializarHeader();
+  const contenido = await Huayca.cargarContenidoSitio();
+  Huayca.aplicarHeaderFooter(contenido);
+  if (document.getElementById('heroTitulo')) Huayca.aplicarContenidoHome(contenido);
+});

@@ -412,4 +412,35 @@ router.patch('/pedidos/:id/despacho', async (req, res) => {
   }
 });
 
+// -------------------------------------------------
+// CONTENIDO DEL SITIO (CMS liviano clave/valor)
+// -------------------------------------------------
+
+const CLAVES_CONTENIDO_VALIDAS = [
+  'header', 'hero', 'organizaciones_cards', 'banner_apoya', 'como_funciona', 'footer'
+];
+
+// PUT /api/admin/contenido/:clave  Body = el valor JSON completo de esa clave
+// (reemplaza el contenido anterior entero, no hace merge parcial).
+router.put('/contenido/:clave', async (req, res) => {
+  try {
+    const { clave } = req.params;
+    if (!CLAVES_CONTENIDO_VALIDAS.includes(clave)) {
+      return res.status(400).json({ error: `clave debe ser una de: ${CLAVES_CONTENIDO_VALIDAS.join(', ')}` });
+    }
+    if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+      return res.status(400).json({ error: 'El body debe ser un objeto JSON' });
+    }
+    await db.query(
+      `INSERT INTO contenido_sitio (clave, valor) VALUES (?, ?)
+       ON DUPLICATE KEY UPDATE valor = VALUES(valor)`,
+      [clave, JSON.stringify(req.body)]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al guardar el contenido' });
+  }
+});
+
 module.exports = router;

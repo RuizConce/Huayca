@@ -22,11 +22,101 @@ async function ensureColumn(connection, tabla, columna, definicion) {
   return true;
 }
 
+// Igual que ensureColumn, pero para tablas nuevas agregadas después de la
+// primera corrida de schema.sql (mismo problema: el batch completo se salta
+// entero apenas la primera tabla ya existe).
+async function ensureTable(connection, tabla, createSql) {
+  const [rows] = await connection.query(
+    `SELECT COUNT(*) AS existe FROM information_schema.TABLES
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?`,
+    [tabla]
+  );
+  if (rows[0].existe > 0) return false;
+  await connection.query(createSql);
+  return true;
+}
+
 // Cambios de schema posteriores al schema.sql original, aplicados de forma
 // incremental e idempotente (no rompen si ya existen).
 const MIGRACIONES_INCREMENTALES = [
   { tabla: 'proveedores', columna: 'logo_url', definicion: 'logo_url VARCHAR(500) AFTER datos_bancarios' }
 ];
+
+const TABLAS_INCREMENTALES = [
+  {
+    tabla: 'contenido_sitio',
+    createSql: `
+      CREATE TABLE contenido_sitio (
+        clave VARCHAR(60) PRIMARY KEY,
+        valor JSON NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `
+  }
+];
+
+// Valores por defecto de contenido_sitio: son los textos/imágenes que ya
+// están escritos a mano en el HTML público. Se insertan con INSERT IGNORE
+// (nunca pisan una fila que el admin ya haya editado) para que el sitio no
+// dependa de que alguien entre al panel a cargar esto antes de poder mostrar
+// algo razonable.
+const CONTENIDO_DEFAULT = {
+  header: {
+    logo_url: '',
+    mensaje_franja_izquierda: 'Cada compra fortalece una organización y mejora la vida de más personas.',
+    mensaje_franja_derecha: 'Juntos hacemos comunidad'
+  },
+  hero: {
+    titulo: 'Tecnología con propósito,',
+    subtitulo_destacado: 'oportunidades que transforman.',
+    texto_descriptivo: 'Compra productos útiles y de calidad mientras apoyas a organizaciones que construyen un mejor futuro.',
+    texto_boton: 'Conoce cómo funciona',
+    link_boton: '#como-funciona',
+    badge_texto: 'CATÁLOGO REFERENCIAL 2026',
+    imagenes: ['⌚', '📍', '🔒', '💡', '🔌', '🎒']
+  },
+  organizaciones_cards: {
+    tarjetas: [
+      { titulo: 'COLEGIOS', texto: 'Más recursos para educar y crecer.', imagen_url: '', color: 'verde' },
+      { titulo: 'JUNTAS DE VECINOS', texto: 'Unidos logramos más para todos.', imagen_url: '', color: 'naranjo' },
+      { titulo: 'CLUBES Y DEPORTES', texto: 'Apoyamos tu pasión, impulsamos talentos.', imagen_url: '', color: 'azul' },
+      { titulo: 'ORGANIZACIONES SOCIALES', texto: 'Juntos generamos impacto y bienestar.', imagen_url: '', color: 'verde' }
+    ]
+  },
+  banner_apoya: {
+    titulo: 'Apoya a tu organización favorita',
+    texto: 'Al comprar en Huayca, parte de tu compra va directo a la organización que elijas.',
+    boton_texto: 'Buscar organización',
+    boton_link: 'organizaciones.html',
+    imagen_url: ''
+  },
+  como_funciona: {
+    pasos: [
+      { numero: '01', titulo: 'Elige una organización' },
+      { numero: '02', titulo: 'Selecciona productos' },
+      { numero: '03', titulo: 'Comparte y compra' },
+      { numero: '04', titulo: 'La organización recibe su comisión' }
+    ],
+    frase_destacada: 'Tú compras. Tu comunidad crece.'
+  },
+  footer: {
+    tagline: 'Conectamos comunidades.',
+    descripcion: 'Tecnología, bienestar y oportunidades que transforman comunidades.',
+    redes_sociales: { instagram: '', facebook: '', tiktok: '', youtube: '' }
+  }
+};
+
+async function seedContenidoDefault(connection) {
+  const claves = [];
+  for (const [clave, valor] of Object.entries(CONTENIDO_DEFAULT)) {
+    const [result] = await connection.query(
+      'INSERT IGNORE INTO contenido_sitio (clave, valor) VALUES (?, ?)',
+      [clave, JSON.stringify(valor)]
+    );
+    if (result.affectedRows > 0) claves.push(clave);
+  }
+  return claves;
+}
 
 async function runMigration() {
   const connection = await mysql.createConnection({
@@ -63,6 +153,20 @@ async function runMigration() {
   }
   if (columnasAgregadas.length) {
     resultado.mensaje += ` (columnas agregadas: ${columnasAgregadas.join(', ')})`;
+  }
+
+  const tablasAgregadas = [];
+  for (const t of TABLAS_INCREMENTALES) {
+    const agregada = await ensureTable(connection, t.tabla, t.createSql);
+    if (agregada) tablasAgregadas.push(t.tabla);
+  }
+  if (tablasAgregadas.length) {
+    resultado.mensaje += ` (tablas agregadas: ${tablasAgregadas.join(', ')})`;
+  }
+
+  const clavesSeedeadas = await seedContenidoDefault(connection);
+  if (clavesSeedeadas.length) {
+    resultado.mensaje += ` (contenido_sitio seedeado: ${clavesSeedeadas.join(', ')})`;
   }
 
   await connection.end();

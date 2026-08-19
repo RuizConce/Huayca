@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Huayca — Contenido del sitio</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, 'Segoe UI', sans-serif; margin: 0; background: #f4f5f2; color: #1a1a1a; }
+  header { background: #0d2b4e; color: white; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  header h1 { font-size: 18px; margin: 0; }
+  header .der { display: flex; align-items: center; gap: 10px; }
+  header a.volver { color: #ffffffcc; font-size: 13px; }
+  header button { background: transparent; border: 1px solid #ffffff55; color: white; padding: 6px 12px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+  main { max-width: 820px; margin: 0 auto; padding: 20px; }
+  .hidden { display: none !important; }
+
+  .seccion-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 18px; }
+  .seccion-card h2 { margin: 0 0 4px; color: #0d2b4e; font-size: 16px; }
+  .seccion-card .desc { color: #888; font-size: 12.5px; margin: 0 0 16px; }
+  label { display: block; font-size: 13px; color: #555; margin-top: 12px; margin-bottom: 5px; }
+  input, textarea, select { width: 100%; padding: 9px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
+  textarea { resize: vertical; min-height: 56px; }
+  .fila-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .preview-img { width: 44px; height: 44px; border-radius: 8px; background: #f4f5f2; object-fit: contain; border: 1px solid #eee; flex-shrink: 0; }
+  .con-preview { display: flex; align-items: center; gap: 10px; }
+  .con-preview input { flex: 1; }
+
+  .tarjeta-bloque { border: 1px solid #eee; border-radius: 8px; padding: 12px; margin-top: 12px; }
+  .tarjeta-bloque .num { font-size: 11px; font-weight: 700; color: #e8801e; text-transform: uppercase; }
+
+  .fila-imagen { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  .fila-imagen input { flex: 1; }
+  .btn-quitar { background: #fdf1f0; color: #c0392b; border: 1px solid #f5c6c1; border-radius: 6px; padding: 8px 10px; font-size: 13px; cursor: pointer; flex-shrink: 0; }
+  .btn-agregar { background: white; color: #0d2b4e; border: 1px dashed #0d2b4e55; border-radius: 6px; padding: 8px 12px; font-size: 13px; margin-top: 10px; cursor: pointer; }
+
+  .fila-paso { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+  .fila-paso .numero-fijo {
+    width: 34px; height: 34px; border-radius: 50%; background: #0d2b4e; color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0;
+  }
+  .fila-paso input { flex: 1; }
+
+  .acciones-seccion { display: flex; align-items: center; gap: 12px; margin-top: 18px; }
+  .btn-guardar { background: #e8801e; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .btn-guardar:disabled { opacity: 0.6; cursor: not-allowed; }
+  .msg-seccion { font-size: 13px; }
+  .msg-seccion.ok { color: #1e8e3e; }
+  .msg-seccion.error { color: #c0392b; }
+
+  #estadoCarga { text-align: center; padding: 60px 20px; color: #888; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <a href="admin.html" class="volver">← Volver al panel</a>
+    <h1 style="margin-top:4px;">🖋️ Contenido del sitio</h1>
+  </div>
+  <div class="der">
+    <button onclick="cerrarSesion()">Cerrar sesión</button>
+  </div>
+</header>
+
+<main>
+  <div id="estadoCarga">Cargando contenido…</div>
+
+  <form id="formContenido" class="hidden">
+
+    <!-- HEADER -->
+    <div class="seccion-card">
+      <h2>Encabezado</h2>
+      <p class="desc">Franja superior y logo, visibles en todas las páginas.</p>
+      <label>Logo (URL)</label>
+      <div class="con-preview">
+        <img class="preview-img" id="previewLogo" src="" alt="">
+        <input id="h_logo_url" placeholder="https://... (vacío = usa el logo por defecto)" oninput="actualizarPreview('h_logo_url','previewLogo')">
+      </div>
+      <div class="fila-2">
+        <div><label>Mensaje franja izquierda</label><input id="h_franja_izq"></div>
+        <div><label>Mensaje franja derecha</label><input id="h_franja_der"></div>
+      </div>
+      <div class="acciones-seccion">
+        <button type="button" class="btn-guardar" onclick="guardarSeccion('header')">Guardar cambios</button>
+        <span class="msg-seccion" id="msg_header"></span>
+      </div>
+    </div>
+
+    <!-- HERO -->
+    <div class="seccion-card">
+      <h2>Hero (portada)</h2>
+      <p class="desc">El bloque principal de la home.</p>
+      <label>Título</label>
+      <input id="hero_titulo">
+      <label>Subtítulo destacado (línea en verde/cursiva)</label>
+      <input id="hero_subtitulo">
+      <label>Texto descriptivo</label>
+      <textarea id="hero_descripcion"></textarea>
+      <div class="fila-2">
+        <div><label>Texto del botón</label><input id="hero_boton_texto"></div>
+        <div><label>Link del botón</label><input id="hero_boton_link"></div>
+      </div>
+      <label>Texto del badge (sobre la imagen)</label>
+      <input id="hero_badge">
+      <label>Imágenes / íconos flotantes (en orden)</label>
+      <div id="heroImagenesLista"></div>
+      <button type="button" class="btn-agregar" onclick="agregarFilaImagen()">+ Agregar imagen</button>
+      <div class="acciones-seccion">
+        <button type="button" class="btn-guardar" onclick="guardarSeccion('hero')">Guardar cambios</button>
+        <span class="msg-seccion" id="msg_hero"></span>
+      </div>
+    </div>
+
+    <!-- ORGANIZACIONES CARDS -->
+    <div class="seccion-card">
+      <h2>Tarjetas de tipo de organización</h2>
+      <p class="desc">Las 4 tarjetas de la home (Colegios, Juntas de vecinos, etc.)</p>
+      <div id="tarjetasOrg"></div>
+      <div class="acciones-seccion">
+        <button type="button" class="btn-guardar" onclick="guardarSeccion('organizaciones_cards')">Guardar cambios</button>
+        <span class="msg-seccion" id="msg_organizaciones_cards"></span>
+      </div>
+    </div>
+
+    <!-- BANNER APOYA -->
+    <div class="seccion-card">
+      <h2>Banner "Apoya a tu organización"</h2>
+      <label>Título</label>
+      <input id="ba_titulo">
+      <label>Texto</label>
+      <textarea id="ba_texto"></textarea>
+      <div class="fila-2">
+        <div><label>Texto del botón</label><input id="ba_boton_texto"></div>
+        <div><label>Link del botón</label><input id="ba_boton_link"></div>
+      </div>
+      <label>Imagen (URL)</label>
+      <div class="con-preview">
+        <img class="preview-img" id="previewBanner" src="" alt="">
+        <input id="ba_imagen" placeholder="https://... (vacío = usa el ícono por defecto)" oninput="actualizarPreview('ba_imagen','previewBanner')">
+      </div>
+      <div class="acciones-seccion">
+        <button type="button" class="btn-guardar" onclick="guardarSeccion('banner_apoya')">Guardar cambios</button>
+        <span class="msg-seccion" id="msg_banner_apoya"></span>
+      </div>
+    </div>
+
+    <!-- COMO FUNCIONA -->
+    <div class="seccion-card">
+      <h2>¿Cómo funciona Huayca?</h2>
+      <div id="pasosContenedor"></div>
+      <label>Frase destacada</label>
+      <input id="cf_frase">
+      <div class="acciones-seccion">
+        <button type="button" class="btn-guardar" onclick="guardarSeccion('como_funciona')">Guardar cambios</button>
+        <span class="msg-seccion" id="msg_como_funciona"></span>
+      </div>
+    </div>
+
+    <!-- FOOTER -->
+    <div class="seccion-card">
+      <h2>Footer</h2>
+      <label>Tagline (frase corta)</label>
+      <input id="f_tagline">
+      <label>Descripción</label>
+      <textarea id="f_descripcion"></textarea>
+      <div class="fila-2">
+        <div><label>Instagram (URL)</label><input id="f_instagram"></div>
+        <div><label>Facebook (URL)</label><input id="f_facebook"></div>
+      </div>
+      <div class="fila-2">
+        <div><label>TikTok (URL)</label><input id="f_tiktok"></div>
+        <div><label>YouTube (URL)</label><input id="f_youtube"></div>
+      </div>
+      <div class="acciones-seccion">
+        <button type="button" class="btn-guardar" onclick="guardarSeccion('footer')">Guardar cambios</button>
+        <span class="msg-seccion" id="msg_footer"></span>
+      </div>
+    </div>
+
+  </form>
+</main>
+
+<script>
+const BASE_URL = window.location.origin;
+const token = localStorage.getItem('huayca_admin_token') || '';
+let contenidoActual = {};
+
+if (!token) window.location.href = 'admin.html';
+
+function cerrarSesion() {
+  localStorage.removeItem('huayca_admin_token');
+  window.location.href = 'admin.html';
+}
+
+function authHeaders() {
+  return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
+}
+
+function actualizarPreview(inputId, imgId) {
+  const url = document.getElementById(inputId).value.trim();
+  const img = document.getElementById(imgId);
+  img.src = url;
+  img.style.visibility = url ? 'visible' : 'hidden';
+}
+
+// ---------- Hero: lista de imágenes editable ----------
+function renderFilasImagenes(imagenes) {
+  const cont = document.getElementById('heroImagenesLista');
+  cont.innerHTML = '';
+  (imagenes && imagenes.length ? imagenes : ['']).forEach((val) => agregarFilaImagen(val));
+}
+function agregarFilaImagen(valor) {
+  const cont = document.getElementById('heroImagenesLista');
+  const fila = document.createElement('div');
+  fila.className = 'fila-imagen';
+  fila.innerHTML = `
+    <input value="${valor ? String(valor).replace(/"/g, '&quot;') : ''}" placeholder="Emoji (ej: 📍) o URL de imagen">
+    <button type="button" class="btn-quitar" onclick="this.parentElement.remove()">Quitar</button>
+  `;
+  cont.appendChild(fila);
+}
+function leerImagenes() {
+  return [...document.querySelectorAll('#heroImagenesLista input')]
+    .map((i) => i.value.trim())
+    .filter(Boolean);
+}
+
+// ---------- Organizaciones: 4 tarjetas ----------
+function renderTarjetasOrg(tarjetas) {
+  const cont = document.getElementById('tarjetasOrg');
+  const base = tarjetas && tarjetas.length === 4 ? tarjetas : [{}, {}, {}, {}];
+  cont.innerHTML = base.map((t, i) => `
+    <div class="tarjeta-bloque">
+      <span class="num">Tarjeta ${i + 1}</span>
+      <label>Título</label>
+      <input id="org_${i}_titulo" value="${(t.titulo || '').replace(/"/g, '&quot;')}">
+      <label>Texto</label>
+      <input id="org_${i}_texto" value="${(t.texto || '').replace(/"/g, '&quot;')}">
+      <div class="fila-2">
+        <div>
+          <label>Imagen (URL, opcional)</label>
+          <input id="org_${i}_imagen" value="${(t.imagen_url || '').replace(/"/g, '&quot;')}">
+        </div>
+        <div>
+          <label>Color</label>
+          <select id="org_${i}_color">
+            <option value="verde" ${t.color === 'verde' ? 'selected' : ''}>Verde</option>
+            <option value="naranjo" ${t.color === 'naranjo' ? 'selected' : ''}>Naranjo</option>
+            <option value="azul" ${t.color === 'azul' ? 'selected' : ''}>Azul</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+function leerTarjetasOrg() {
+  return [0, 1, 2, 3].map((i) => ({
+    titulo: document.getElementById(`org_${i}_titulo`).value.trim(),
+    texto: document.getElementById(`org_${i}_texto`).value.trim(),
+    imagen_url: document.getElementById(`org_${i}_imagen`).value.trim(),
+    color: document.getElementById(`org_${i}_color`).value
+  }));
+}
+
+// ---------- Cómo funciona: 4 pasos ----------
+function renderPasos(pasos) {
+  const cont = document.getElementById('pasosContenedor');
+  const base = pasos && pasos.length === 4 ? pasos : [
+    { numero: '01' }, { numero: '02' }, { numero: '03' }, { numero: '04' }
+  ];
+  cont.innerHTML = base.map((p, i) => {
+    const numero = p.numero || String(i + 1).padStart(2, '0');
+    return `
+      <div class="fila-paso">
+        <div class="numero-fijo">${numero}</div>
+        <input id="paso_${i}_titulo" value="${(p.titulo || '').replace(/"/g, '&quot;')}" placeholder="Título del paso ${i + 1}">
+        <input type="hidden" id="paso_${i}_numero" value="${numero}">
+      </div>
+    `;
+  }).join('');
+}
+function leerPasos() {
+  return [0, 1, 2, 3].map((i) => ({
+    numero: document.getElementById(`paso_${i}_numero`).value,
+    titulo: document.getElementById(`paso_${i}_titulo`).value.trim()
+  }));
+}
+
+// ---------- Cargar contenido actual y poblar el formulario ----------
+async function cargarContenido() {
+  try {
+    const res = await fetch(BASE_URL + '/api/contenido');
+    contenidoActual = await res.json();
+  } catch (e) {
+    contenidoActual = {};
+  }
+
+  const h = contenidoActual.header || {};
+  document.getElementById('h_logo_url').value = h.logo_url || '';
+  document.getElementById('h_franja_izq').value = h.mensaje_franja_izquierda || '';
+  document.getElementById('h_franja_der').value = h.mensaje_franja_derecha || '';
+  actualizarPreview('h_logo_url', 'previewLogo');
+
+  const hero = contenidoActual.hero || {};
+  document.getElementById('hero_titulo').value = hero.titulo || '';
+  document.getElementById('hero_subtitulo').value = hero.subtitulo_destacado || '';
+  document.getElementById('hero_descripcion').value = hero.texto_descriptivo || '';
+  document.getElementById('hero_boton_texto').value = hero.texto_boton || '';
+  document.getElementById('hero_boton_link').value = hero.link_boton || '';
+  document.getElementById('hero_badge').value = hero.badge_texto || '';
+  renderFilasImagenes(hero.imagenes);
+
+  renderTarjetasOrg((contenidoActual.organizaciones_cards || {}).tarjetas);
+
+  const ba = contenidoActual.banner_apoya || {};
+  document.getElementById('ba_titulo').value = ba.titulo || '';
+  document.getElementById('ba_texto').value = ba.texto || '';
+  document.getElementById('ba_boton_texto').value = ba.boton_texto || '';
+  document.getElementById('ba_boton_link').value = ba.boton_link || '';
+  document.getElementById('ba_imagen').value = ba.imagen_url || '';
+  actualizarPreview('ba_imagen', 'previewBanner');
+
+  const cf = contenidoActual.como_funciona || {};
+  renderPasos(cf.pasos);
+  document.getElementById('cf_frase').value = cf.frase_destacada || '';
+
+  const f = contenidoActual.footer || {};
+  document.getElementById('f_tagline').value = f.tagline || '';
+  document.getElementById('f_descripcion').value = f.descripcion || '';
+  const redes = f.redes_sociales || {};
+  document.getElementById('f_instagram').value = redes.instagram || '';
+  document.getElementById('f_facebook').value = redes.facebook || '';
+  document.getElementById('f_tiktok').value = redes.tiktok || '';
+  document.getElementById('f_youtube').value = redes.youtube || '';
+
+  document.getElementById('estadoCarga').classList.add('hidden');
+  document.getElementById('formContenido').classList.remove('hidden');
+}
+
+// ---------- Armar el payload de cada sección y guardar ----------
+function payloadDeSeccion(clave) {
+  switch (clave) {
+    case 'header':
+      return {
+        logo_url: document.getElementById('h_logo_url').value.trim(),
+        mensaje_franja_izquierda: document.getElementById('h_franja_izq').value.trim(),
+        mensaje_franja_derecha: document.getElementById('h_franja_der').value.trim()
+      };
+    case 'hero':
+      return {
+        titulo: document.getElementById('hero_titulo').value.trim(),
+        subtitulo_destacado: document.getElementById('hero_subtitulo').value.trim(),
+        texto_descriptivo: document.getElementById('hero_descripcion').value.trim(),
+        texto_boton: document.getElementById('hero_boton_texto').value.trim(),
+        link_boton: document.getElementById('hero_boton_link').value.trim(),
+        badge_texto: document.getElementById('hero_badge').value.trim(),
+        imagenes: leerImagenes()
+      };
+    case 'organizaciones_cards':
+      return { tarjetas: leerTarjetasOrg() };
+    case 'banner_apoya':
+      return {
+        titulo: document.getElementById('ba_titulo').value.trim(),
+        texto: document.getElementById('ba_texto').value.trim(),
+        boton_texto: document.getElementById('ba_boton_texto').value.trim(),
+        boton_link: document.getElementById('ba_boton_link').value.trim(),
+        imagen_url: document.getElementById('ba_imagen').value.trim()
+      };
+    case 'como_funciona':
+      return {
+        pasos: leerPasos(),
+        frase_destacada: document.getElementById('cf_frase').value.trim()
+      };
+    case 'footer':
+      return {
+        tagline: document.getElementById('f_tagline').value.trim(),
+        descripcion: document.getElementById('f_descripcion').value.trim(),
+        redes_sociales: {
+          instagram: document.getElementById('f_instagram').value.trim(),
+          facebook: document.getElementById('f_facebook').value.trim(),
+          tiktok: document.getElementById('f_tiktok').value.trim(),
+          youtube: document.getElementById('f_youtube').value.trim()
+        }
+      };
+  }
+}
+
+async function guardarSeccion(clave) {
+  const msg = document.getElementById('msg_' + clave);
+  msg.textContent = 'Guardando…';
+  msg.className = 'msg-seccion';
+  try {
+    const res = await fetch(BASE_URL + '/api/admin/contenido/' + clave, {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: JSON.stringify(payloadDeSeccion(clave))
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al guardar');
+    msg.textContent = '✓ Guardado';
+    msg.className = 'msg-seccion ok';
+    setTimeout(() => { msg.textContent = ''; }, 2500);
+  } catch (e) {
+    msg.textContent = e.message;
+    msg.className = 'msg-seccion error';
+  }
+}
+
+cargarContenido();
+</script>
+
+</body>
+</html>

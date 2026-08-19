@@ -12,8 +12,8 @@
 
 <div class="anuncio-bar">
   <div class="container">
-    <span>💚 Cada compra fortalece una organización y mejora la vida de más personas.</span>
-    <span class="der">Juntos hacemos comunidad</span>
+    <span id="franjaIzq">💚 Cada compra fortalece una organización y mejora la vida de más personas.</span>
+    <span class="der" id="franjaDer">Juntos hacemos comunidad</span>
   </div>
 </div>
 
@@ -65,14 +65,14 @@
     <div class="container">
       <div>
         <div class="hero-eyebrow">HUAYCA MARKETPLACE</div>
-        <h1>Tecnología con propósito,<br><span class="destaque cursiva">oportunidades que transforman.</span></h1>
-        <p class="hero-sub">Compra productos útiles y de calidad mientras apoyas a organizaciones que construyen un mejor futuro.</p>
-        <a href="#como-funciona" class="btn btn-navy">Conoce cómo funciona →</a>
+        <h1 id="heroTitulo"><span id="heroTituloPrincipal">Tecnología con propósito,</span><br><span class="destaque cursiva" id="heroTituloDestacado">oportunidades que transforman.</span></h1>
+        <p class="hero-sub" id="heroDescripcion">Compra productos útiles y de calidad mientras apoyas a organizaciones que construyen un mejor futuro.</p>
+        <a href="#como-funciona" class="btn btn-navy" id="heroBoton">Conoce cómo funciona →</a>
       </div>
       <div class="hero-visual">
-        <div class="hero-tag">CATÁLOGO<small>REFERENCIAL 2026</small></div>
+        <div class="hero-tag" id="heroBadge">CATÁLOGO REFERENCIAL 2026</div>
         <div class="hero-visual-shape"></div>
-        <div class="hero-visual-grid">
+        <div class="hero-visual-grid" id="heroImagenes">
           <div class="hero-chip">⌚</div>
           <div class="hero-chip">📍</div>
           <div class="hero-chip">🔒</div>
@@ -85,23 +85,23 @@
   </section>
 
   <div class="container">
-    <div class="orgtipos">
-      <a href="organizacion-registro.html?tipo=colegio" class="orgtipo-card c1">
+    <div class="orgtipos" id="orgTipos">
+      <a href="organizacion-registro.html?tipo=colegio" class="orgtipo-card c1" data-tarjeta="0">
         <span class="icono">🎓</span>
         <b>Colegios</b>
         <span>Más recursos para educar y crecer.</span>
       </a>
-      <a href="organizacion-registro.html?tipo=junta_vecinos" class="orgtipo-card c2">
+      <a href="organizacion-registro.html?tipo=junta_vecinos" class="orgtipo-card c2" data-tarjeta="1">
         <span class="icono">🏘️</span>
         <b>Juntas de Vecinos</b>
         <span>Unidos logramos más para todos.</span>
       </a>
-      <a href="organizacion-registro.html?tipo=club_deportivo" class="orgtipo-card c3">
+      <a href="organizacion-registro.html?tipo=club_deportivo" class="orgtipo-card c3" data-tarjeta="2">
         <span class="icono">🏆</span>
         <b>Clubes y Deportes</b>
         <span>Apoyamos tu pasión, impulsamos talentos.</span>
       </a>
-      <a href="organizacion-registro.html?tipo=otro" class="orgtipo-card c4">
+      <a href="organizacion-registro.html?tipo=otro" class="orgtipo-card c4" data-tarjeta="3">
         <span class="icono">👥</span>
         <b>Organizaciones Sociales</b>
         <span>Juntos generamos impacto y bienestar.</span>
@@ -126,20 +126,20 @@
   <section class="seccion container" id="como-funciona">
     <div class="impacto-grid">
       <div class="impacto-card verde">
-        <h3>Apoya a tu organización favorita</h3>
-        <p>Al comprar en Huayca, parte de tu compra va directo a la organización que elijas.</p>
-        <a href="organizaciones.html" class="btn btn-primary" style="align-self:flex-start;">Buscar organización</a>
-        <div class="impacto-visual">🤝</div>
+        <h3 id="bannerTitulo">Apoya a tu organización favorita</h3>
+        <p id="bannerTexto">Al comprar en Huayca, parte de tu compra va directo a la organización que elijas.</p>
+        <a href="organizaciones.html" class="btn btn-primary" id="bannerBoton" style="align-self:flex-start;">Buscar organización</a>
+        <div class="impacto-visual" id="bannerVisual">🤝</div>
       </div>
       <div class="impacto-card lila">
         <h3>¿Cómo funciona Huayca?</h3>
-        <ul class="pasos-lista">
+        <ul class="pasos-lista" id="pasosLista">
           <li><span class="num">1</span> Elige una organización</li>
           <li><span class="num">2</span> Selecciona productos</li>
           <li><span class="num">3</span> Comparte y compra</li>
           <li><span class="num">4</span> La organización recibe su comisión</li>
         </ul>
-        <p style="font-style:italic; color:var(--navy); font-weight:700; margin-top:6px;">Tú compras. Tu comunidad crece.</p>
+        <p id="fraseDestacada" style="font-style:italic; color:var(--navy); font-weight:700; margin-top:6px;">Tú compras. Tu comunidad crece.</p>
         <a href="organizaciones.html" class="ver-todos">Conoce más sobre Huayca →</a>
       </div>
     </div>
@@ -174,8 +174,8 @@
           <div class="logo-mark">H</div>
           <b>Huayca</b>
         </div>
-        <p class="tagline">Conectamos comunidades. Tecnología, bienestar y oportunidades que transforman comunidades.</p>
-        <div class="footer-social">
+        <p class="tagline" id="footerTagline">Conectamos comunidades. Tecnología, bienestar y oportunidades que transforman comunidades.</p>
+        <div class="footer-social" id="footerSocial">
           <span>📷</span><span>📘</span><span>🎵</span><span>▶️</span>
         </div>
       </div>

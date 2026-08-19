@@ -247,6 +247,16 @@ CREATE TABLE link_clicks (
   FOREIGN KEY (producto_id) REFERENCES productos(id)
 );
 
+-- Contenido editable del sitio público (textos/imágenes del home, franjas,
+-- footer, etc.) desde el panel de admin. Clave/valor JSON a propósito: así
+-- se pueden agregar campos editables nuevos sin tener que migrar el schema
+-- cada vez. Ver src/db/migrate.js para los defaults con los que se seedea.
+CREATE TABLE contenido_sitio (
+  clave VARCHAR(60) PRIMARY KEY,
+  valor JSON NOT NULL,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
 -- -------------------------------------------------
 -- Índices de apoyo para las consultas más frecuentes
 -- -------------------------------------------------

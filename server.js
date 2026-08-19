@@ -11,6 +11,7 @@ const pagosRouter = require('./src/routes/pagos');
 const liquidacionesRouter = require('./src/routes/liquidaciones');
 const ticketsRouter = require('./src/routes/tickets');
 const bootstrapRouter = require('./src/routes/bootstrap');
+const contenidoRouter = require('./src/routes/contenido');
 
 const app = express();
 app.use(cors());
@@ -33,6 +34,7 @@ app.use('/api/pagos', pagosRouter);
 app.use('/api/liquidaciones', liquidacionesRouter);
 app.use('/api/tickets', ticketsRouter);
 app.use('/api/bootstrap', bootstrapRouter);
+app.use('/api/contenido', contenidoRouter);
 
 // Manejo de rutas no encontradas
 app.use((req, res) => {
