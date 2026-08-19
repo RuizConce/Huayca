@@ -2,9 +2,26 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const multer = require('multer');
 const db = require('../config/db');
 const { requireAuth } = require('../middleware/auth');
 const { aprobarPagoPedido } = require('../services/pagos.service');
+
+// Railway no tiene disco persistente entre deploys, así que no guardamos
+// archivos en el filesystem: se reciben en memoria y se convierten a
+// data: URI (base64) para guardarlos directo en la fila correspondiente
+// (proveedores.logo_url, productos.imagen_principal, contenido_sitio.valor).
+// 400KB de tope para que un solo PUT con varias imágenes (ej. las 6 del
+// carrusel del hero) no se acerque al límite de payload de la base ni del
+// body-parser de Express.
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 400 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (!file.mimetype.startsWith('image/')) return cb(new Error('El archivo debe ser una imagen'));
+    cb(null, true);
+  }
+});
 
 function slugify(texto) {
   return texto
@@ -39,6 +56,29 @@ router.post('/login', async (req, res) => {
 
 // Todo lo que sigue requiere admin autenticado
 router.use(requireAuth(['admin']));
+
+// -------------------------------------------------
+// SUBIDA DE IMÁGENES (logo de marca, imagen de producto, contenido del sitio)
+// -------------------------------------------------
+
+// POST /api/admin/upload-imagen  Body: multipart/form-data, campo "imagen"
+// Devuelve { url } — un data: URI listo para guardar tal cual en cualquiera
+// de los campos de imagen (todos ya aceptan data:image/... además de URLs).
+router.post('/upload-imagen', (req, res) => {
+  upload.single('imagen')(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({ error: 'La imagen pesa más de 400KB. Comprimila (ej. en tinypng.com) y volvé a intentar.' });
+      }
+      return res.status(400).json({ error: err.message });
+    }
+    if (err) return res.status(400).json({ error: err.message });
+    if (!req.file) return res.status(400).json({ error: 'No se recibió ninguna imagen (campo "imagen")' });
+
+    const url = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+    res.json({ url, bytes: req.file.size });
+  });
+});
 
 // -------------------------------------------------
 // ORGANIZACIONES: aprobar / rechazar / suspender

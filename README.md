@@ -73,6 +73,16 @@ Los textos e imágenes del home (franja superior, hero, tarjetas de tipo de orga
 - El carrusel arranca interactivo con el fallback de 6 íconos ya escrito en el HTML **antes** de esperar la respuesta de `/api/contenido` — si la llamada falla, ese fallback sigue funcionando (autoplay incluido) tal cual.
 - Cada campo de imagen del panel (header, hero, tarjetas de organización, banner) muestra la medida recomendada debajo del input y, si la imagen carga, sus dimensiones reales como referencia (nunca bloquea el guardado). Mismo patrón aplicado al logo de marca y a la imagen principal de producto en `admin.html`.
 
+### Imágenes: se suben, no se pegan por URL
+
+Todos los campos de imagen de ambos paneles (logo de marca, imagen de producto, logo del header, imágenes del hero, imagen del banner, imagen de cada tarjeta de organización) son de subida de archivo, no de URL — con preview y botón "✕" para quitar la imagen.
+
+- **`POST /api/admin/upload-imagen`** (admin, `multipart/form-data`, campo `imagen`): recibe el archivo en memoria (nunca toca el filesystem) y devuelve `{ url }` con la imagen codificada como `data:` URI en base64, lista para guardar tal cual en el campo correspondiente.
+- **¿Por qué base64 en la base en vez de guardar el archivo en `/public`?** Railway no tiene disco persistente entre deploys — cualquier archivo escrito ahí se pierde en el próximo push. Guardar la imagen codificada dentro de la fila (MySQL sí persiste) evita ese problema sin necesitar un servicio de storage externo.
+- **Tope de 400KB por imagen** (`multer` con `limits.fileSize`, mensaje claro si se excede) para que un solo `PUT` con varias imágenes (ej. las 6 del carrusel del hero en un solo request) no se acerque al límite de payload. `express.json()` corre con `limit: '8mb'` para tener margen.
+- `proveedores.logo_url` y `productos.imagen_principal` pasaron de `VARCHAR(500)` a `LONGTEXT` (schema.sql + migración incremental `ensureColumnType` en `src/db/migrate.js`, que ensancha la columna en bases que ya habían migrado con el tipo viejo). `contenido_sitio.valor` ya era `JSON`, sin cambios.
+- El campo `hero.imagenes` sigue aceptando emoji/texto corto como placeholder liviano — el botón "📤" de cada fila sube una foto y reemplaza lo que hubiera en esa fila.
+
 No hay carrito multi-producto: el modelo de pedidos es un producto por pedido (así está diseñado el backend), así que "Comprar ahora" lleva directo al checkout de ese producto. El ícono de carrito en el header queda como afordancia visual, sin funcionalidad real, para no prometer algo que el backend no soporta todavía.
 
 ## Cómo se reparte la comisión (lo importante)

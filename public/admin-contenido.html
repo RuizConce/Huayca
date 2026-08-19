@@ -35,6 +35,7 @@
   .fila-imagen { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
   .fila-imagen input { flex: 1; }
   .btn-quitar { background: #fdf1f0; color: #c0392b; border: 1px solid #f5c6c1; border-radius: 6px; padding: 8px 10px; font-size: 13px; cursor: pointer; flex-shrink: 0; }
+  .btn-subir { background: #eef1fb; color: #3f51b5; border: 1px solid #c7d0f5; border-radius: 6px; padding: 8px 10px; font-size: 13px; cursor: pointer; flex-shrink: 0; display: inline-flex; align-items: center; }
   .btn-agregar { background: white; color: #0d2b4e; border: 1px dashed #0d2b4e55; border-radius: 6px; padding: 8px 12px; font-size: 13px; margin-top: 10px; cursor: pointer; }
 
   .fila-paso { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
@@ -75,12 +76,14 @@
     <div class="seccion-card">
       <h2>Encabezado</h2>
       <p class="desc">Franja superior y logo, visibles en todas las páginas.</p>
-      <label>Logo (URL)</label>
+      <label>Logo</label>
       <div class="con-preview">
         <img class="preview-img" id="previewLogo" src="" alt="">
-        <input id="h_logo_url" placeholder="https://... (vacío = usa el logo por defecto)" oninput="actualizarPreview('h_logo_url','previewLogo','dim_h_logo_url')">
+        <label class="btn-subir">📤 Subir logo<input type="file" accept="image/*" style="display:none;" onchange="subirImagen(this,'h_logo_url','previewLogo','dim_h_logo_url')"></label>
+        <button type="button" class="btn-quitar" onclick="quitarImagenCampo('h_logo_url','previewLogo','dim_h_logo_url')">✕</button>
       </div>
-      <small class="ayuda-medida" id="dim_h_logo_url">Recomendado: 400×120px, PNG con fondo transparente</small>
+      <input type="hidden" id="h_logo_url">
+      <small class="ayuda-medida" id="dim_h_logo_url">Recomendado: 400×120px, PNG con fondo transparente · máx. 400KB</small>
       <div class="fila-2">
         <div><label>Mensaje franja izquierda</label><input id="h_franja_izq"></div>
         <div><label>Mensaje franja derecha</label><input id="h_franja_der"></div>
@@ -139,12 +142,14 @@
         <div><label>Texto del botón</label><input id="ba_boton_texto"></div>
         <div><label>Link del botón</label><input id="ba_boton_link"></div>
       </div>
-      <label>Imagen (URL)</label>
+      <label>Imagen</label>
       <div class="con-preview">
         <img class="preview-img" id="previewBanner" src="" alt="">
-        <input id="ba_imagen" placeholder="https://... (vacío = usa el ícono por defecto)" oninput="actualizarPreview('ba_imagen','previewBanner','dim_ba_imagen')">
+        <label class="btn-subir">📤 Subir imagen<input type="file" accept="image/*" style="display:none;" onchange="subirImagen(this,'ba_imagen','previewBanner','dim_ba_imagen')"></label>
+        <button type="button" class="btn-quitar" onclick="quitarImagenCampo('ba_imagen','previewBanner','dim_ba_imagen')">✕</button>
       </div>
-      <small class="ayuda-medida" id="dim_ba_imagen">Recomendado: 1000×700px, JPG o PNG, foto horizontal</small>
+      <input type="hidden" id="ba_imagen">
+      <small class="ayuda-medida" id="dim_ba_imagen">Recomendado: 1000×700px, JPG o PNG, foto horizontal · máx. 400KB</small>
       <div class="acciones-seccion">
         <button type="button" class="btn-guardar" onclick="guardarSeccion('banner_apoya')">Guardar cambios</button>
         <span class="msg-seccion" id="msg_banner_apoya"></span>
@@ -225,6 +230,44 @@ function actualizarPreview(inputId, imgId, hintId) {
   img.onerror = () => { hint.innerHTML = base; };
 }
 
+// Sube el archivo elegido a /api/admin/upload-imagen, guarda el data: URI
+// devuelto en el input oculto correspondiente y refresca preview+dimensiones
+// reusando actualizarPreview. Railway no tiene disco persistente entre
+// deploys, por eso las imágenes se guardan como base64 en la base en vez de
+// como archivos — de ahí el tope de 400KB por imagen.
+async function subirImagen(fileInputEl, hiddenInputId, imgId, hintId) {
+  const file = fileInputEl.files[0];
+  if (!file) return;
+
+  const hint = document.getElementById(hintId);
+  if (hint && hint.dataset.base === undefined) hint.dataset.base = hint.textContent;
+  const base = hint ? hint.dataset.base : '';
+  if (hint) hint.innerHTML = `${base} — <span style="color:#888;">subiendo…</span>`;
+
+  const formData = new FormData();
+  formData.append('imagen', file);
+  try {
+    const res = await fetch(BASE_URL + '/api/admin/upload-imagen', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token },
+      body: formData
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al subir la imagen');
+    document.getElementById(hiddenInputId).value = data.url;
+    actualizarPreview(hiddenInputId, imgId, hintId);
+  } catch (e) {
+    if (hint) hint.innerHTML = `${base} — <span style="color:#c0392b;">${e.message}</span>`;
+  } finally {
+    fileInputEl.value = '';
+  }
+}
+
+function quitarImagenCampo(hiddenInputId, imgId, hintId) {
+  document.getElementById(hiddenInputId).value = '';
+  actualizarPreview(hiddenInputId, imgId, hintId);
+}
+
 // ---------- Hero: lista de imágenes editable ----------
 function renderFilasImagenes(imagenes) {
   const cont = document.getElementById('heroImagenesLista');
@@ -238,13 +281,42 @@ function agregarFilaImagen(valor) {
   bloque.innerHTML = `
     <div class="fila-imagen">
       <img class="preview-img" style="width:32px;height:32px;visibility:hidden;" data-preview src="" alt="">
-      <input class="fila-imagen-input" value="${valor ? String(valor).replace(/"/g, '&quot;') : ''}" placeholder="Emoji (ej: 📍) o URL de imagen" oninput="actualizarFilaImagen(this)">
+      <input class="fila-imagen-input" value="${valor ? String(valor).replace(/"/g, '&quot;') : ''}" placeholder="Emoji (ej: 📍) o subí una foto →" oninput="actualizarFilaImagen(this)">
+      <label class="btn-subir">📤<input type="file" accept="image/*" style="display:none;" onchange="subirImagenFila(this)"></label>
       <button type="button" class="btn-quitar" onclick="this.closest('.fila-imagen-bloque').remove()">Quitar</button>
     </div>
     <small class="ayuda-medida dim-fila"></small>
   `;
   cont.appendChild(bloque);
   actualizarFilaImagen(bloque.querySelector('.fila-imagen-input'));
+}
+// Sube la foto de una fila del carrusel y reemplaza el valor del input de
+// esa misma fila (pise lo que hubiera: emoji o una URL anterior).
+async function subirImagenFila(fileInputEl) {
+  const file = fileInputEl.files[0];
+  if (!file) return;
+  const bloque = fileInputEl.closest('.fila-imagen-bloque');
+  const inputTexto = bloque.querySelector('.fila-imagen-input');
+  const hint = bloque.querySelector('.dim-fila');
+  hint.innerHTML = '<span style="color:#888;">subiendo…</span>';
+
+  const formData = new FormData();
+  formData.append('imagen', file);
+  try {
+    const res = await fetch(BASE_URL + '/api/admin/upload-imagen', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token },
+      body: formData
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al subir la imagen');
+    inputTexto.value = data.url;
+    actualizarFilaImagen(inputTexto);
+  } catch (e) {
+    hint.innerHTML = `<span style="color:#c0392b;">${e.message}</span>`;
+  } finally {
+    fileInputEl.value = '';
+  }
 }
 // Solo dispara preview/dimensiones si el valor parece URL — un emoji o
 // texto corto no tiene sentido pasarlo por un <img>.
@@ -285,12 +357,14 @@ function renderTarjetasOrg(tarjetas) {
       <input id="org_${i}_texto" value="${(t.texto || '').replace(/"/g, '&quot;')}">
       <div class="fila-2">
         <div>
-          <label>Imagen (URL, opcional)</label>
+          <label>Imagen (opcional)</label>
           <div class="con-preview">
             <img class="preview-img" id="previewOrg${i}" src="" alt="">
-            <input id="org_${i}_imagen" value="${(t.imagen_url || '').replace(/"/g, '&quot;')}" oninput="actualizarPreview('org_${i}_imagen','previewOrg${i}','dim_org_${i}')">
+            <label class="btn-subir">📤<input type="file" accept="image/*" style="display:none;" onchange="subirImagen(this,'org_${i}_imagen','previewOrg${i}','dim_org_${i}')"></label>
+            <button type="button" class="btn-quitar" onclick="quitarImagenCampo('org_${i}_imagen','previewOrg${i}','dim_org_${i}')">✕</button>
           </div>
-          <small class="ayuda-medida" id="dim_org_${i}">Recomendado: 600×450px, JPG o PNG, foto horizontal</small>
+          <input type="hidden" id="org_${i}_imagen" value="${(t.imagen_url || '').replace(/"/g, '&quot;')}">
+          <small class="ayuda-medida" id="dim_org_${i}">Recomendado: 600×450px, JPG o PNG, foto horizontal · máx. 400KB</small>
         </div>
         <div>
           <label>Color</label>

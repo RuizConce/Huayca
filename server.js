@@ -15,7 +15,10 @@ const contenidoRouter = require('./src/routes/contenido');
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+// Límite subido de 100kb (default de Express) a 8mb: las imágenes subidas
+// desde el panel viajan como data: URI en base64 dentro del JSON de
+// contenido_sitio / proveedores / productos (ver POST /api/admin/upload-imagen).
+app.use(express.json({ limit: '8mb' }));
 
 // Panel de administración estático (HTML/JS puro, sin build step):
 // queda disponible en /admin.html, sirviéndose desde el mismo dominio que

@@ -129,12 +129,14 @@
     <input id="marcaEmail" placeholder="Opcional">
     <label>Teléfono de contacto</label>
     <input id="marcaTelefono" placeholder="Opcional">
-    <label>URL del logo</label>
+    <label>Logo de la marca</label>
     <div class="con-preview">
       <img class="preview-img" id="previewMarcaLogo" src="" alt="">
-      <input id="marcaLogo" placeholder="https://..." oninput="actualizarPreviewImagen('marcaLogo','previewMarcaLogo','dimMarcaLogo')">
+      <input type="file" accept="image/*" style="flex:1;" onchange="subirImagenAdmin(this,'marcaLogo','previewMarcaLogo','dimMarcaLogo')">
+      <button type="button" class="btn-danger" onclick="quitarImagen('marcaLogo','previewMarcaLogo','dimMarcaLogo')">✕</button>
     </div>
-    <small class="ayuda-medida" id="dimMarcaLogo">Recomendado: 300×300px, PNG con fondo transparente</small>
+    <input type="hidden" id="marcaLogo">
+    <small class="ayuda-medida" id="dimMarcaLogo">Recomendado: 300×300px, PNG con fondo transparente · máx. 400KB</small>
     <div class="modal-buttons">
       <button class="btn-secondary" onclick="cerrarModalMarca()">Cancelar</button>
       <button class="btn-primary" onclick="guardarMarca()">Guardar</button>
@@ -151,12 +153,14 @@
     <input id="productoNombre" placeholder="Ej: GPS Vehicular">
     <label>Descripción</label>
     <textarea id="productoDescripcion"></textarea>
-    <label>URL de imagen principal</label>
+    <label>Imagen principal</label>
     <div class="con-preview">
       <img class="preview-img" id="previewProductoImagen" src="" alt="">
-      <input id="productoImagen" placeholder="https://..." oninput="actualizarPreviewImagen('productoImagen','previewProductoImagen','dimProductoImagen')">
+      <input type="file" accept="image/*" style="flex:1;" onchange="subirImagenAdmin(this,'productoImagen','previewProductoImagen','dimProductoImagen')">
+      <button type="button" class="btn-danger" onclick="quitarImagen('productoImagen','previewProductoImagen','dimProductoImagen')">✕</button>
     </div>
-    <small class="ayuda-medida" id="dimProductoImagen">Recomendado: 800×800px, foto cuadrada, fondo blanco o transparente</small>
+    <input type="hidden" id="productoImagen">
+    <small class="ayuda-medida" id="dimProductoImagen">Recomendado: 800×800px, foto cuadrada, fondo blanco o transparente · máx. 400KB</small>
     <label>Precio proveedor ($)</label>
     <input id="productoPrecioProveedor" type="number" oninput="actualizarPreview()">
     <label>Comisión afiliado ($)</label>
@@ -414,6 +418,42 @@ function actualizarPreviewImagen(inputId, imgId, hintId) {
     hint.innerHTML = `${base} — <span class="dim-real">imagen actual: ${img.naturalWidth}×${img.naturalHeight}px</span>`;
   };
   img.onerror = () => { hint.innerHTML = base; };
+}
+
+// Sube el archivo elegido a /api/admin/upload-imagen, guarda el data: URI
+// devuelto en el input oculto correspondiente y refresca preview+dimensiones
+// reusando actualizarPreviewImagen.
+async function subirImagenAdmin(fileInputEl, hiddenInputId, imgId, hintId) {
+  const file = fileInputEl.files[0];
+  if (!file) return;
+
+  const hint = document.getElementById(hintId);
+  if (hint && hint.dataset.base === undefined) hint.dataset.base = hint.textContent;
+  const base = hint ? hint.dataset.base : '';
+  if (hint) hint.innerHTML = `${base} — <span style="color:#888;">subiendo…</span>`;
+
+  const formData = new FormData();
+  formData.append('imagen', file);
+  try {
+    const res = await fetch(BASE_URL + '/api/admin/upload-imagen', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token },
+      body: formData
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al subir la imagen');
+    document.getElementById(hiddenInputId).value = data.url;
+    actualizarPreviewImagen(hiddenInputId, imgId, hintId);
+  } catch (e) {
+    if (hint) hint.innerHTML = `${base} — <span style="color:#c0392b;">${e.message}</span>`;
+  } finally {
+    fileInputEl.value = '';
+  }
+}
+
+function quitarImagen(hiddenInputId, imgId, hintId) {
+  document.getElementById(hiddenInputId).value = '';
+  actualizarPreviewImagen(hiddenInputId, imgId, hintId);
 }
 
 function actualizarPreview() {

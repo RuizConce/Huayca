@@ -22,6 +22,20 @@ async function ensureColumn(connection, tabla, columna, definicion) {
   return true;
 }
 
+// Ensancha una columna (ej. VARCHAR(500) -> LONGTEXT) solo si todavía no
+// tiene ese tipo. MODIFY COLUMN es seguro de reintentar, pero chequeamos
+// antes para no reescribir la tabla en cada boot una vez que ya se hizo.
+async function ensureColumnType(connection, tabla, columna, tipoEsperado, alterSql) {
+  const [rows] = await connection.query(
+    `SELECT DATA_TYPE FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+    [tabla, columna]
+  );
+  if (!rows.length || rows[0].DATA_TYPE === tipoEsperado) return false;
+  await connection.query(alterSql);
+  return true;
+}
+
 // Igual que ensureColumn, pero para tablas nuevas agregadas después de la
 // primera corrida de schema.sql (mismo problema: el batch completo se salta
 // entero apenas la primera tabla ya existe).
@@ -40,6 +54,20 @@ async function ensureTable(connection, tabla, createSql) {
 // incremental e idempotente (no rompen si ya existen).
 const MIGRACIONES_INCREMENTALES = [
   { tabla: 'proveedores', columna: 'logo_url', definicion: 'logo_url VARCHAR(500) AFTER datos_bancarios' }
+];
+
+// Las columnas de imagen partieron como VARCHAR(500) (pensadas para URLs) y
+// ahora también guardan imágenes subidas como data: URI en base64, que no
+// entran en 500 caracteres ni de cerca.
+const TIPOS_INCREMENTALES = [
+  {
+    tabla: 'proveedores', columna: 'logo_url', tipoEsperado: 'longtext',
+    alterSql: 'ALTER TABLE proveedores MODIFY COLUMN logo_url LONGTEXT'
+  },
+  {
+    tabla: 'productos', columna: 'imagen_principal', tipoEsperado: 'longtext',
+    alterSql: 'ALTER TABLE productos MODIFY COLUMN imagen_principal LONGTEXT'
+  }
 ];
 
 const TABLAS_INCREMENTALES = [
@@ -153,6 +181,15 @@ async function runMigration() {
   }
   if (columnasAgregadas.length) {
     resultado.mensaje += ` (columnas agregadas: ${columnasAgregadas.join(', ')})`;
+  }
+
+  const tiposAmpliados = [];
+  for (const t of TIPOS_INCREMENTALES) {
+    const ampliada = await ensureColumnType(connection, t.tabla, t.columna, t.tipoEsperado, t.alterSql);
+    if (ampliada) tiposAmpliados.push(`${t.tabla}.${t.columna}`);
+  }
+  if (tiposAmpliados.length) {
+    resultado.mensaje += ` (columnas ampliadas: ${tiposAmpliados.join(', ')})`;
   }
 
   const tablasAgregadas = [];

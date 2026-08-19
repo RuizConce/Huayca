@@ -16,7 +16,7 @@ CREATE TABLE proveedores (
   email_contacto VARCHAR(150),
   telefono_contacto VARCHAR(30),
   datos_bancarios JSON, -- {banco, tipo_cuenta, numero, titular, rut}
-  logo_url VARCHAR(500),
+  logo_url LONGTEXT, -- URL o imagen subida como data: URI (ver POST /api/admin/upload-imagen)
   gestiona_despacho BOOLEAN DEFAULT TRUE,
   estado ENUM('activo','inactivo') DEFAULT 'activo',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -48,7 +48,7 @@ CREATE TABLE productos (
   nombre VARCHAR(200) NOT NULL,
   slug VARCHAR(200) NOT NULL UNIQUE,
   descripcion TEXT,
-  imagen_principal VARCHAR(500),
+  imagen_principal LONGTEXT, -- URL o imagen subida como data: URI (ver POST /api/admin/upload-imagen)
   imagenes JSON, -- array de URLs adicionales
   precio_proveedor DECIMAL(10,0) NOT NULL,   -- monto que recibe el proveedor
   comision_afiliado DECIMAL(10,0) NOT NULL DEFAULT 0,
