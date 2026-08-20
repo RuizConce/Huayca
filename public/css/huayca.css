@@ -98,6 +98,20 @@ header.site {
   background: linear-gradient(135deg, var(--green) 0%, var(--orange) 100%);
   display: flex; align-items: center; justify-content: center;
   color: #fff; font-size: 20px; font-weight: 700;
+  flex-shrink: 0;
+}
+/* Cuando hay un logo real subido (Huayca.aplicarHeaderFooter), el
+   contenedor deja de ser un ícono cuadrado de 40x40 y pasa a acomodar la
+   proporción natural del logo -sea un wordmark horizontal o un ícono
+   cuadrado- sin recortarlo. object-fit:contain + height fijo + width:auto
+   escala completo en vez de recortar con cover. */
+.logo-mark.con-imagen {
+  width: auto; max-width: 200px; height: 40px;
+  background: none; border-radius: 0;
+}
+.logo-mark.con-imagen img {
+  width: auto; height: 100%; max-width: 200px;
+  object-fit: contain;
 }
 .logo-texto { display: flex; flex-direction: column; line-height: 1.1; }
 .logo-texto b { color: var(--navy); font-size: 19px; letter-spacing: -0.01em; }

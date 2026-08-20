@@ -153,18 +153,24 @@ const Huayca = (() => {
       if (h.logo_url) {
         document.querySelectorAll('.logo-mark').forEach((el) => {
           const original = el.innerHTML; // el ícono "H" por defecto, para volver a él si la imagen falla
+          const claseOriginal = el.className;
           const img = document.createElement('img');
           img.alt = 'Huayca';
-          img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:inherit;';
           // El onerror se engancha ANTES de asignar src, para no perder el
           // evento si la carga falla de inmediato (ej. data: URI inválido).
           img.onerror = () => {
             console.error('[Huayca] El logo configurado no se pudo cargar; se mantiene el ícono por defecto.');
             el.innerHTML = original;
+            el.className = claseOriginal;
           };
           img.src = h.logo_url;
           el.innerHTML = '';
           el.appendChild(img);
+          // .con-imagen deja el contenedor de 40x40 fijo y pasa a acomodar
+          // la proporción real del logo (object-fit:contain) — un logo
+          // horizontal tipo wordmark o uno cuadrado tipo ícono de app se
+          // ven completos, sin recortarse. Ver css/huayca.css.
+          el.className = claseOriginal + ' con-imagen';
         });
       }
     }
