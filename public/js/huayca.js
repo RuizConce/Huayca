@@ -203,11 +203,12 @@ const Huayca = (() => {
   }
 
   // ---------- Carrusel del hero ----------
-  // Autoplay (4.5s) + flechas + puntos + swipe táctil. Con 0 o 1 imagen no
-  // hay controles: 0 muestra un placeholder fijo, 1 muestra esa sola imagen
-  // fija (ver construirSlidesHero). Se re-inicializa cada vez que se
-  // reconstruyen los slides (init de la página con el fallback del HTML, y
-  // de nuevo si /api/contenido trae imágenes propias).
+  // Autoplay (5.5s — un poco más lento que un carrusel de solo-imágenes,
+  // porque acá hay texto que leer) + flechas + puntos + swipe táctil. Con 0
+  // o 1 slide con contenido real no hay controles: se muestra fijo (ver
+  // construirSlidesHeroFull). Se re-inicializa cada vez que se reconstruyen
+  // los slides (init de la página con el fallback del HTML, y de nuevo
+  // cuando /api/contenido trae los slides propios).
   let heroCarruselIntervalId = null;
 
   function iniciarCarruselHero() {
@@ -220,7 +221,7 @@ const Huayca = (() => {
       heroCarruselIntervalId = null;
     }
 
-    const slides = track.querySelectorAll('.hero-slide');
+    const slides = track.querySelectorAll('.hero-slide-full');
     const total = slides.length;
     const multiple = total > 1;
     carrusel.classList.toggle('un-solo', !multiple);
@@ -228,7 +229,7 @@ const Huayca = (() => {
     const dotsCont = document.getElementById('heroCarruselDots');
     if (dotsCont) {
       dotsCont.innerHTML = multiple
-        ? Array.from({ length: total }, (_, i) => `<button type="button" data-i="${i}" aria-label="Ir a la imagen ${i + 1}"></button>`).join('')
+        ? Array.from({ length: total }, (_, i) => `<button type="button" data-i="${i}" aria-label="Ir al slide ${i + 1}"></button>`).join('')
         : '';
     }
 
@@ -242,11 +243,11 @@ const Huayca = (() => {
     }
     irA(0);
 
-    if (!multiple) return; // nada que autoavanzar/deslizar con 0 o 1 imagen
+    if (!multiple) return; // nada que autoavanzar/deslizar con 0 o 1 slide
 
     function reiniciarAutoplay() {
       if (heroCarruselIntervalId) clearInterval(heroCarruselIntervalId);
-      heroCarruselIntervalId = setInterval(() => irA(indice + 1), 4500);
+      heroCarruselIntervalId = setInterval(() => irA(indice + 1), 5500);
     }
 
     const flechaIzq = document.getElementById('heroFlechaIzq');
@@ -273,32 +274,69 @@ const Huayca = (() => {
     reiniciarAutoplay();
   }
 
-  // Reconstruye los slides a partir de hero.imagenes (mezcla emoji/texto
-  // corto y URLs de imagen indistintamente) y reinicia el carrusel. Un
-  // array vacío no deja el hero en blanco: muestra un placeholder limpio.
-  function construirSlidesHero(imagenes) {
+  function escapeHtml(str) {
+    return String(str == null ? '' : str).replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+  }
+
+  // Reconstruye el hero COMPLETO (imagen + eyebrow + título + subtítulo +
+  // texto + botón + badge) a partir de hero.slides — cada slide es un
+  // bloque independiente, no solo una imagen. Un slide "sin contenido real"
+  // (todos los campos vacíos) se descarta antes de pintar: así, mientras
+  // Cristian solo haya cargado el slide 1, el hero queda fijo (sin
+  // flechas/puntos) en vez de mostrar 2 slides en blanco. Si terminan
+  // descartándose los 3 (o vino un array vacío), no se toca nada: se deja
+  // el fallback ya escrito en el HTML, siguiendo el mismo principio de
+  // "nunca romper el sitio" que el resto de este módulo.
+  function construirSlidesHeroFull(slides) {
     const track = document.getElementById('heroCarruselTrack');
     if (!track) return;
-    const lista = imagenes.filter(Boolean);
-    if (!lista.length) {
-      track.innerHTML = '<div class="hero-slide"><span class="hero-slide-icono">🖼️</span></div>';
-    } else {
-      track.innerHTML = lista.map((img) => {
-        const esUrl = /^https?:\/\//.test(img) || img.startsWith('/') || img.startsWith('data:image/');
-        return `<div class="hero-slide">${esUrl ? `<img src="${img}" alt="">` : `<span class="hero-slide-icono">${img}</span>`}</div>`;
-      }).join('');
-      // Si alguna foto falla al cargar, cae a un ícono en vez de dejar el
-      // recuadro roto.
-      track.querySelectorAll('.hero-slide img').forEach((imgEl) => {
-        imgEl.onerror = () => {
-          console.error('[Huayca] Una imagen del carrusel del hero no se pudo cargar.');
-          const span = document.createElement('span');
-          span.className = 'hero-slide-icono';
-          span.textContent = '🖼️';
-          imgEl.replaceWith(span);
-        };
-      });
-    }
+    const lista = (slides || []).filter((s) => s && Object.values(s).some((v) => v && String(v).trim()));
+    if (!lista.length) return;
+
+    track.innerHTML = lista.map((s) => {
+      const titulo = s.titulo || '';
+      const destacado = s.subtitulo_destacado || '';
+      const desc = s.texto_descriptivo || '';
+      const textoBoton = s.texto_boton || '';
+      const linkBoton = s.link_boton || '#como-funciona';
+      const badge = s.badge_texto || '';
+      const img = s.imagen_url || '';
+      const esUrl = /^https?:\/\//.test(img) || img.startsWith('/') || img.startsWith('data:image/');
+      const visual = esUrl
+        ? `<img src="${escapeHtml(img)}" alt="">`
+        : `<span class="hero-slide-icono">🖼️</span>`;
+      return `
+        <div class="hero-slide-full">
+          <div class="container">
+            <div>
+              <div class="hero-eyebrow">HUAYCA MARKETPLACE</div>
+              <h1>${titulo ? `<span>${escapeHtml(titulo)}</span>` : ''}${titulo && destacado ? '<br>' : ''}${destacado ? `<span class="destaque cursiva">${escapeHtml(destacado)}</span>` : ''}</h1>
+              ${desc ? `<p class="hero-sub">${escapeHtml(desc)}</p>` : ''}
+              ${textoBoton ? `<a href="${escapeHtml(linkBoton)}" class="btn btn-navy">${escapeHtml(textoBoton)} →</a>` : ''}
+            </div>
+            <div class="hero-visual">
+              ${badge ? `<div class="hero-tag">${escapeHtml(badge)}</div>` : ''}
+              <div class="hero-visual-shape"></div>
+              <div class="hero-visual-imagen">${visual}</div>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+
+    // Si alguna foto falla al cargar, cae a un ícono en vez de dejar el
+    // recuadro roto.
+    track.querySelectorAll('.hero-visual-imagen img').forEach((imgEl) => {
+      imgEl.onerror = () => {
+        console.error('[Huayca] Una imagen del hero no se pudo cargar.');
+        const span = document.createElement('span');
+        span.className = 'hero-slide-icono';
+        span.textContent = '🖼️';
+        imgEl.replaceWith(span);
+      };
+    });
+
     iniciarCarruselHero();
   }
 
@@ -310,26 +348,11 @@ const Huayca = (() => {
     if (!contenido) return;
 
     const hero = contenido.hero;
-    if (hero) {
-      const tp = document.getElementById('heroTituloPrincipal');
-      const td = document.getElementById('heroTituloDestacado');
-      if (tp && hero.titulo) tp.textContent = hero.titulo;
-      if (td && hero.subtitulo_destacado) td.textContent = hero.subtitulo_destacado;
-      const sub = document.getElementById('heroDescripcion');
-      if (sub && hero.texto_descriptivo) sub.textContent = hero.texto_descriptivo;
-      const btn = document.getElementById('heroBoton');
-      if (btn) {
-        if (hero.texto_boton) btn.textContent = hero.texto_boton + ' →';
-        if (hero.link_boton) btn.setAttribute('href', hero.link_boton);
-      }
-      const badge = document.getElementById('heroBadge');
-      if (badge && hero.badge_texto) badge.textContent = hero.badge_texto;
-      // hero.imagenes puede venir como array vacío (el admin borró todas las
-      // fotos) — es una respuesta válida y distinta de "no vino el campo":
-      // ahí sí hay que reemplazar el fallback por el placeholder, por eso se
-      // chequea Array.isArray en vez de truthiness del length.
-      if (Array.isArray(hero.imagenes)) construirSlidesHero(hero.imagenes);
-    }
+    // Solo actúa si vino en el shape nuevo ({ slides: [...] }) — un
+    // contenido.hero en el shape viejo (de antes de la migración a
+    // carrusel completo) no debería llegar nunca desde un backend ya
+    // migrado, pero por las dudas se ignora en vez de romper el hero.
+    if (hero && Array.isArray(hero.slides)) construirSlidesHeroFull(hero.slides);
 
     const cards = contenido.organizaciones_cards && contenido.organizaciones_cards.tarjetas;
     if (Array.isArray(cards) && cards.length) {

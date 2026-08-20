@@ -99,14 +99,27 @@ const CONTENIDO_DEFAULT = {
     // comportamiento a nadie que ya tenga un logo solo-ícono.
     mostrar_texto_junto_logo: true
   },
+  // El hero es un carrusel de 3 slides completos (imagen + título + subtítulo
+  // + texto + botón + badge, todo junto). Solo el primero viene con el texto
+  // por defecto que ya estaba escrito a mano en el HTML: los otros dos
+  // arrancan vacíos, así que el frontend los filtra como "sin contenido
+  // real" y el hero se muestra fijo (sin flechas/puntos) hasta que Cristian
+  // cargue los otros dos desde el panel. Ver migrarHeroASlides() para la
+  // conversión del shape viejo (título/imagenes sueltas) al nuevo.
   hero: {
-    titulo: 'Tecnología con propósito,',
-    subtitulo_destacado: 'oportunidades que transforman.',
-    texto_descriptivo: 'Compra productos útiles y de calidad mientras apoyas a organizaciones que construyen un mejor futuro.',
-    texto_boton: 'Conoce cómo funciona',
-    link_boton: '#como-funciona',
-    badge_texto: 'CATÁLOGO REFERENCIAL 2026',
-    imagenes: ['⌚', '📍', '🔒', '💡', '🔌', '🎒']
+    slides: [
+      {
+        imagen_url: '',
+        titulo: 'Tecnología con propósito,',
+        subtitulo_destacado: 'oportunidades que transforman.',
+        texto_descriptivo: 'Compra productos útiles y de calidad mientras apoyas a organizaciones que construyen un mejor futuro.',
+        texto_boton: 'Conoce cómo funciona',
+        link_boton: '#como-funciona',
+        badge_texto: 'CATÁLOGO REFERENCIAL 2026'
+      },
+      { imagen_url: '', titulo: '', subtitulo_destacado: '', texto_descriptivo: '', texto_boton: '', link_boton: '', badge_texto: '' },
+      { imagen_url: '', titulo: '', subtitulo_destacado: '', texto_descriptivo: '', texto_boton: '', link_boton: '', badge_texto: '' }
+    ]
   },
   organizaciones_cards: {
     tarjetas: [
@@ -138,6 +151,47 @@ const CONTENIDO_DEFAULT = {
     redes_sociales: { instagram: '', facebook: '', tiktok: '', youtube: '' }
   }
 };
+
+// Migra la clave 'hero' vieja (título/subtítulo/texto/botón/badge fijos +
+// un array de imágenes sueltas que rotaban solas) al nuevo shape de
+// carrusel completo ({ slides: [...] }), donde cada slide trae su propia
+// imagen y su propio texto. Corre antes de seedContenidoDefault a
+// propósito: como el seed usa INSERT IGNORE, una fila 'hero' ya existente
+// (shape viejo o nuevo) nunca la toca, así que la conversión in-place
+// tiene que pasar acá. Idempotente: si la fila ya está en el shape nuevo
+// (tiene 'slides'), no hace nada; si no hay fila todavía, tampoco (el seed
+// de abajo se encarga de crearla con el default ya en shape nuevo).
+async function migrarHeroASlides(connection) {
+  const [rows] = await connection.query('SELECT valor FROM contenido_sitio WHERE clave = ?', ['hero']);
+  if (!rows.length) return false;
+
+  let valor;
+  try {
+    valor = typeof rows[0].valor === 'string' ? JSON.parse(rows[0].valor) : rows[0].valor;
+  } catch (e) {
+    return false; // valor corrupto: mejor no tocarlo que romper el arranque
+  }
+  if (!valor || Array.isArray(valor.slides)) return false; // ya migrado, o vacío
+
+  // Las imágenes viejas podían ser tanto URLs/data-URIs reales (si Cristian
+  // ya había subido fotos) como los emojis placeholder del default original
+  // (⌚📍🔒...). En ambos casos se copian tal cual al imagen_url del slide:
+  // el frontend ya sabe mostrar un placeholder si el valor no es una imagen
+  // válida (ver esUrl en construirSlidesHeroFull, public/js/huayca.js).
+  const imagenesViejas = Array.isArray(valor.imagenes) ? valor.imagenes.filter(Boolean) : [];
+  const slides = [0, 1, 2].map((i) => ({
+    imagen_url: imagenesViejas[i] || '',
+    titulo: valor.titulo || '',
+    subtitulo_destacado: valor.subtitulo_destacado || '',
+    texto_descriptivo: valor.texto_descriptivo || '',
+    texto_boton: valor.texto_boton || '',
+    link_boton: valor.link_boton || '',
+    badge_texto: valor.badge_texto || ''
+  }));
+
+  await connection.query('UPDATE contenido_sitio SET valor = ? WHERE clave = ?', [JSON.stringify({ slides }), 'hero']);
+  return true;
+}
 
 async function seedContenidoDefault(connection) {
   const claves = [];
@@ -204,6 +258,11 @@ async function runMigration() {
   }
   if (tablasAgregadas.length) {
     resultado.mensaje += ` (tablas agregadas: ${tablasAgregadas.join(', ')})`;
+  }
+
+  const heroMigrado = await migrarHeroASlides(connection);
+  if (heroMigrado) {
+    resultado.mensaje += ' (hero migrado al shape de carrusel de slides)';
   }
 
   const clavesSeedeadas = await seedContenidoDefault(connection);

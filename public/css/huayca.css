@@ -204,7 +204,23 @@ header.site {
 
 /* ---------- Hero ---------- */
 .hero { padding: 56px 0 64px; overflow: hidden; }
-.hero .container { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; }
+/* El hero entero (imagen + texto + botón) es ahora un carrusel de slides
+   completos: #heroCarrusel/#heroCarruselTrack envuelven .hero-slide-full,
+   cada uno con su propio .container de 2 columnas adentro (antes .container
+   colgaba directo de .hero, con un solo texto fijo y solo las fotos del
+   óvalo rotando). */
+/* overflow:hidden acá (no solo en .hero) es lo que efectivamente recorta
+   los slides no-activos: sin esto, el badge/tag de un slide vecino (que
+   cuelga con position:absolute cerca del borde de SU columna, ya
+   trasladada fuera de vista) puede asomar unos px en el borde. */
+#heroCarrusel { position: relative; overflow: hidden; }
+.hero-carrusel-track {
+  display: flex; width: 100%;
+  transition: transform 0.6s cubic-bezier(.4,0,.2,1);
+  touch-action: pan-y;
+}
+.hero-slide-full { flex: 0 0 100%; min-width: 0; }
+.hero-slide-full .container { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; }
 .hero-eyebrow { color: var(--green); font-weight: 700; font-size: 14px; margin-bottom: 10px; }
 .hero h1 { font-size: 42px; line-height: 1.12; color: var(--navy); margin: 0 0 6px; font-weight: 800; letter-spacing: -0.015em; }
 .hero h1 .destaque { color: var(--green); }
@@ -223,49 +239,42 @@ header.site {
   border-radius: 45% 55% 60% 40% / 50% 45% 55% 50%;
   opacity: 0.9;
 }
-/* Carrusel del hero: las fotos (idealmente PNG transparente) flotan
-   directamente sobre la forma orgánica verde, sin tarjeta blanca detrás. */
-.hero-carrusel {
+/* La foto de cada slide (idealmente PNG transparente) flota directamente
+   sobre la forma orgánica verde, sin tarjeta blanca detrás. Ya no es un
+   carrusel propio (antes .hero-carrusel anidado adentro de .hero-visual):
+   ahora cada slide completo trae una sola imagen fija. */
+.hero-visual-imagen {
   position: relative; z-index: 1;
   width: 74%; max-width: 280px; aspect-ratio: 1;
-  overflow: hidden;
-}
-.hero-carrusel-track {
-  display: flex; width: 100%; height: 100%;
-  transition: transform 0.5s cubic-bezier(.4,0,.2,1);
-  touch-action: pan-y;
-}
-.hero-slide {
-  flex: 0 0 100%; width: 100%; height: 100%;
   display: flex; align-items: center; justify-content: center;
 }
-.hero-slide img {
+.hero-visual-imagen img {
   width: 100%; height: 100%; object-fit: contain;
   filter: drop-shadow(0 14px 20px rgba(13,43,78,0.18));
 }
 .hero-slide-icono { font-size: 96px; filter: drop-shadow(0 10px 14px rgba(13,43,78,0.15)); }
 .hero-carrusel-flecha {
   position: absolute; top: 50%; transform: translateY(-50%);
-  width: 34px; height: 34px; border-radius: 50%; background: #fff;
+  width: 38px; height: 38px; border-radius: 50%; background: #fff;
   box-shadow: var(--shadow-lg); border: none;
   display: flex; align-items: center; justify-content: center;
-  font-size: 17px; color: var(--navy); cursor: pointer; z-index: 2;
+  font-size: 18px; color: var(--navy); cursor: pointer; z-index: 3;
 }
-.hero-carrusel-flecha.izq { left: -8px; }
-.hero-carrusel-flecha.der { right: -8px; }
+.hero-carrusel-flecha.izq { left: 4px; }
+.hero-carrusel-flecha.der { right: 4px; }
 .hero-carrusel-dots {
   position: absolute; bottom: 6px; left: 0; right: 0;
-  display: flex; justify-content: center; gap: 6px; z-index: 2;
+  display: flex; justify-content: center; gap: 6px; z-index: 3;
 }
 .hero-carrusel-dots button {
-  width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.6);
+  width: 8px; height: 8px; border-radius: 50%; background: rgba(13,43,78,0.18);
   border: none; padding: 0; cursor: pointer; transition: background .2s, transform .2s;
-  box-shadow: 0 1px 2px rgba(13,43,78,0.3);
 }
-.hero-carrusel-dots button.activo { background: #fff; transform: scale(1.4); }
-/* Con 0 o 1 imagen no tiene sentido carrusel: sin flechas ni puntos */
-.hero-carrusel.un-solo .hero-carrusel-flecha,
-.hero-carrusel.un-solo .hero-carrusel-dots { display: none; }
+.hero-carrusel-dots button.activo { background: var(--green); transform: scale(1.3); }
+/* Con 0 o 1 slide con contenido real no tiene sentido carrusel: sin flechas
+   ni puntos (ver el filtro en construirSlidesHeroFull, public/js/huayca.js) */
+#heroCarrusel.un-solo .hero-carrusel-flecha,
+#heroCarrusel.un-solo .hero-carrusel-dots { display: none; }
 
 .hero-tag {
   position: absolute; top: 14px; right: 14px;
@@ -507,8 +516,13 @@ footer.site ul a:hover { color: #fff; }
 
 /* ---------- Responsive ---------- */
 @media (max-width: 980px) {
-  .hero .container { grid-template-columns: 1fr; }
+  .hero-slide-full .container { grid-template-columns: 1fr; }
   .hero-visual { min-height: 260px; }
+  /* Con texto+imagen apiladas el slide completo es mucho más alto que
+     ancho; unas flechas centradas verticalmente (top:50%) quedarían
+     flotando a mitad del texto en vez de al lado de la imagen. El swipe
+     táctil y los puntos siguen andando igual. */
+  .hero-carrusel-flecha { display: none; }
   .orgtipos { grid-template-columns: repeat(2, 1fr); }
   .impacto-grid { grid-template-columns: 1fr; }
   .confianza-grid { grid-template-columns: repeat(2, 1fr); }

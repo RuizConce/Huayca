@@ -61,34 +61,35 @@
 
 <main>
 
-  <section class="hero">
-    <div class="container">
-      <div>
-        <div class="hero-eyebrow">HUAYCA MARKETPLACE</div>
-        <h1 id="heroTitulo"><span id="heroTituloPrincipal">Tecnología con propósito,</span><br><span class="destaque cursiva" id="heroTituloDestacado">oportunidades que transforman.</span></h1>
-        <p class="hero-sub" id="heroDescripcion">Compra productos útiles y de calidad mientras apoyas a organizaciones que construyen un mejor futuro.</p>
-        <a href="#como-funciona" class="btn btn-navy" id="heroBoton">Conoce cómo funciona →</a>
-      </div>
-      <div class="hero-visual">
-        <div class="hero-tag" id="heroBadge">CATÁLOGO REFERENCIAL 2026</div>
-        <div class="hero-visual-shape"></div>
-        <!-- Fallback si /api/contenido no carga: mismo set de íconos que el
-             default de la base, ya interactivo (autoplay/flechas/puntos) sin
-             esperar la red. Si hero.imagenes trae fotos reales, se reemplaza. -->
-        <div class="hero-carrusel" id="heroCarrusel">
-          <div class="hero-carrusel-track" id="heroCarruselTrack">
-            <div class="hero-slide"><span class="hero-slide-icono">⌚</span></div>
-            <div class="hero-slide"><span class="hero-slide-icono">📍</span></div>
-            <div class="hero-slide"><span class="hero-slide-icono">🔒</span></div>
-            <div class="hero-slide"><span class="hero-slide-icono">💡</span></div>
-            <div class="hero-slide"><span class="hero-slide-icono">🔌</span></div>
-            <div class="hero-slide"><span class="hero-slide-icono">🎒</span></div>
+  <section class="hero" id="heroTitulo">
+    <!-- El id va en la section (no en el <h1>, que ahora se reconstruye
+         entero por slide): sigue sirviendo como marcador para que
+         huayca.js sepa que está en index.html y llame aplicarContenidoHome. -->
+    <!-- Fallback si /api/contenido no carga: el mismo texto/ícono que el
+         default de la base, ya interactivo (el carrusel arranca con este
+         único slide). Si hero.slides trae 2 o 3 slides con contenido real,
+         se reemplaza entero por construirSlidesHeroFull (public/js/huayca.js). -->
+    <div id="heroCarrusel">
+      <div class="hero-carrusel-track" id="heroCarruselTrack">
+        <div class="hero-slide-full">
+          <div class="container">
+            <div>
+              <div class="hero-eyebrow">HUAYCA MARKETPLACE</div>
+              <h1><span>Tecnología con propósito,</span><br><span class="destaque cursiva">oportunidades que transforman.</span></h1>
+              <p class="hero-sub">Compra productos útiles y de calidad mientras apoyas a organizaciones que construyen un mejor futuro.</p>
+              <a href="#como-funciona" class="btn btn-navy">Conoce cómo funciona →</a>
+            </div>
+            <div class="hero-visual">
+              <div class="hero-tag">CATÁLOGO REFERENCIAL 2026</div>
+              <div class="hero-visual-shape"></div>
+              <div class="hero-visual-imagen"><span class="hero-slide-icono">📦</span></div>
+            </div>
           </div>
-          <button type="button" class="hero-carrusel-flecha izq" id="heroFlechaIzq" aria-label="Imagen anterior">‹</button>
-          <button type="button" class="hero-carrusel-flecha der" id="heroFlechaDer" aria-label="Imagen siguiente">›</button>
-          <div class="hero-carrusel-dots" id="heroCarruselDots"></div>
         </div>
       </div>
+      <button type="button" class="hero-carrusel-flecha izq" id="heroFlechaIzq" aria-label="Slide anterior">‹</button>
+      <button type="button" class="hero-carrusel-flecha der" id="heroFlechaDer" aria-label="Slide siguiente">›</button>
+      <div class="hero-carrusel-dots" id="heroCarruselDots"></div>
     </div>
   </section>
 

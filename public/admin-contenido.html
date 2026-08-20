@@ -32,8 +32,6 @@
   .tarjeta-bloque { border: 1px solid #eee; border-radius: 8px; padding: 12px; margin-top: 12px; }
   .tarjeta-bloque .num { font-size: 11px; font-weight: 700; color: #e8801e; text-transform: uppercase; }
 
-  .fila-imagen { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
-  .fila-imagen input { flex: 1; }
   .btn-quitar { background: #fdf1f0; color: #c0392b; border: 1px solid #f5c6c1; border-radius: 6px; padding: 8px 10px; font-size: 13px; cursor: pointer; flex-shrink: 0; }
   .btn-subir { background: #eef1fb; color: #3f51b5; border: 1px solid #c7d0f5; border-radius: 6px; padding: 8px 10px; font-size: 13px; cursor: pointer; flex-shrink: 0; display: inline-flex; align-items: center; }
   .btn-agregar { background: white; color: #0d2b4e; border: 1px dashed #0d2b4e55; border-radius: 6px; padding: 8px 12px; font-size: 13px; margin-top: 10px; cursor: pointer; }
@@ -101,23 +99,8 @@
     <!-- HERO -->
     <div class="seccion-card">
       <h2>Hero (portada)</h2>
-      <p class="desc">El bloque principal de la home.</p>
-      <label>Título</label>
-      <input id="hero_titulo">
-      <label>Subtítulo destacado (línea en verde/cursiva)</label>
-      <input id="hero_subtitulo">
-      <label>Texto descriptivo</label>
-      <textarea id="hero_descripcion"></textarea>
-      <div class="fila-2">
-        <div><label>Texto del botón</label><input id="hero_boton_texto"></div>
-        <div><label>Link del botón</label><input id="hero_boton_link"></div>
-      </div>
-      <label>Texto del badge (sobre la imagen)</label>
-      <input id="hero_badge">
-      <label>Imágenes del carrusel (en orden)</label>
-      <small class="ayuda-medida">Recomendado por imagen: 800×800px, PNG con fondo transparente, producto centrado. También podés usar un emoji suelto (ej: 📍) como placeholder.</small>
-      <div id="heroImagenesLista"></div>
-      <button type="button" class="btn-agregar" onclick="agregarFilaImagen()">+ Agregar imagen</button>
+      <p class="desc">El carrusel principal de la home: 3 slides completos, cada uno con su propia imagen, título, texto y botón. Un slide que quede totalmente vacío no se muestra (si solo cargás el 1, el hero queda fijo, sin flechas ni puntos).</p>
+      <div id="heroSlidesLista"></div>
       <div class="acciones-seccion">
         <button type="button" class="btn-guardar" onclick="guardarSeccion('hero')">Guardar cambios</button>
         <span class="msg-seccion" id="msg_hero"></span>
@@ -272,80 +255,47 @@ function quitarImagenCampo(hiddenInputId, imgId, hintId) {
   actualizarPreview(hiddenInputId, imgId, hintId);
 }
 
-// ---------- Hero: lista de imágenes editable ----------
-function renderFilasImagenes(imagenes) {
-  const cont = document.getElementById('heroImagenesLista');
-  cont.innerHTML = '';
-  (imagenes && imagenes.length ? imagenes : ['']).forEach((val) => agregarFilaImagen(val));
-}
-function agregarFilaImagen(valor) {
-  const cont = document.getElementById('heroImagenesLista');
-  const bloque = document.createElement('div');
-  bloque.className = 'fila-imagen-bloque';
-  bloque.innerHTML = `
-    <div class="fila-imagen">
-      <img class="preview-img" style="width:32px;height:32px;visibility:hidden;" data-preview src="" alt="">
-      <input class="fila-imagen-input" value="${valor ? String(valor).replace(/"/g, '&quot;') : ''}" placeholder="Emoji (ej: 📍) o subí una foto →" oninput="actualizarFilaImagen(this)">
-      <label class="btn-subir">📤<input type="file" accept="image/*" style="display:none;" onchange="subirImagenFila(this)"></label>
-      <button type="button" class="btn-quitar" onclick="this.closest('.fila-imagen-bloque').remove()">Quitar</button>
+// ---------- Hero: 3 slides completos (imagen + texto + botón) ----------
+function renderSlidesHero(slides) {
+  const cont = document.getElementById('heroSlidesLista');
+  const base = Array.isArray(slides) && slides.length === 3 ? slides : [{}, {}, {}];
+  cont.innerHTML = base.map((s, i) => `
+    <div class="tarjeta-bloque">
+      <span class="num">Slide ${i + 1}</span>
+      <label>Imagen</label>
+      <div class="con-preview">
+        <img class="preview-img" id="previewHero${i}" src="" alt="">
+        <label class="btn-subir">📤 Subir imagen<input type="file" accept="image/*" style="display:none;" onchange="subirImagen(this,'hero_${i}_imagen','previewHero${i}','dim_hero_${i}')"></label>
+        <button type="button" class="btn-quitar" onclick="quitarImagenCampo('hero_${i}_imagen','previewHero${i}','dim_hero_${i}')">✕</button>
+      </div>
+      <input type="hidden" id="hero_${i}_imagen" value="${(s.imagen_url || '').replace(/"/g, '&quot;')}">
+      <small class="ayuda-medida" id="dim_hero_${i}">Recomendado: 800×800px, PNG con fondo transparente, producto centrado · máx. 400KB</small>
+      <label>Título</label>
+      <input id="hero_${i}_titulo" value="${(s.titulo || '').replace(/"/g, '&quot;')}">
+      <label>Subtítulo destacado (línea en verde/cursiva)</label>
+      <input id="hero_${i}_subtitulo" value="${(s.subtitulo_destacado || '').replace(/"/g, '&quot;')}">
+      <label>Texto descriptivo</label>
+      <textarea id="hero_${i}_descripcion">${s.texto_descriptivo || ''}</textarea>
+      <div class="fila-2">
+        <div><label>Texto del botón</label><input id="hero_${i}_boton_texto" value="${(s.texto_boton || '').replace(/"/g, '&quot;')}"></div>
+        <div><label>Link del botón</label><input id="hero_${i}_boton_link" value="${(s.link_boton || '').replace(/"/g, '&quot;')}"></div>
+      </div>
+      <label>Texto del badge (opcional, sobre la imagen)</label>
+      <input id="hero_${i}_badge" value="${(s.badge_texto || '').replace(/"/g, '&quot;')}">
     </div>
-    <small class="ayuda-medida dim-fila"></small>
-  `;
-  cont.appendChild(bloque);
-  actualizarFilaImagen(bloque.querySelector('.fila-imagen-input'));
+  `).join('');
+  base.forEach((s, i) => actualizarPreview(`hero_${i}_imagen`, `previewHero${i}`, `dim_hero_${i}`));
 }
-// Sube la foto de una fila del carrusel y reemplaza el valor del input de
-// esa misma fila (pise lo que hubiera: emoji o una URL anterior).
-async function subirImagenFila(fileInputEl) {
-  const file = fileInputEl.files[0];
-  if (!file) return;
-  const bloque = fileInputEl.closest('.fila-imagen-bloque');
-  const inputTexto = bloque.querySelector('.fila-imagen-input');
-  const hint = bloque.querySelector('.dim-fila');
-  hint.innerHTML = '<span style="color:#888;">subiendo…</span>';
-
-  const formData = new FormData();
-  formData.append('imagen', file);
-  try {
-    const res = await fetch(BASE_URL + '/api/admin/upload-imagen', {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + token },
-      body: formData
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Error al subir la imagen');
-    inputTexto.value = data.url;
-    actualizarFilaImagen(inputTexto);
-  } catch (e) {
-    hint.innerHTML = `<span style="color:#c0392b;">${e.message}</span>`;
-  } finally {
-    fileInputEl.value = '';
-  }
-}
-// Solo dispara preview/dimensiones si el valor parece URL — un emoji o
-// texto corto no tiene sentido pasarlo por un <img>.
-function actualizarFilaImagen(inputEl) {
-  const bloque = inputEl.closest('.fila-imagen-bloque');
-  const preview = bloque.querySelector('[data-preview]');
-  const hint = bloque.querySelector('.dim-fila');
-  const val = inputEl.value.trim();
-  const esUrl = /^https?:\/\//.test(val) || val.startsWith('/') || val.startsWith('data:image/');
-  if (!esUrl) {
-    preview.style.visibility = 'hidden';
-    hint.innerHTML = '';
-    return;
-  }
-  preview.src = val;
-  preview.style.visibility = 'visible';
-  preview.onload = () => {
-    hint.innerHTML = `<span class="dim-real">Imagen actual: ${preview.naturalWidth}×${preview.naturalHeight}px</span>`;
-  };
-  preview.onerror = () => { hint.innerHTML = ''; };
-}
-function leerImagenes() {
-  return [...document.querySelectorAll('#heroImagenesLista .fila-imagen-input')]
-    .map((i) => i.value.trim())
-    .filter(Boolean);
+function leerSlidesHero() {
+  return [0, 1, 2].map((i) => ({
+    imagen_url: document.getElementById(`hero_${i}_imagen`).value.trim(),
+    titulo: document.getElementById(`hero_${i}_titulo`).value.trim(),
+    subtitulo_destacado: document.getElementById(`hero_${i}_subtitulo`).value.trim(),
+    texto_descriptivo: document.getElementById(`hero_${i}_descripcion`).value.trim(),
+    texto_boton: document.getElementById(`hero_${i}_boton_texto`).value.trim(),
+    link_boton: document.getElementById(`hero_${i}_boton_link`).value.trim(),
+    badge_texto: document.getElementById(`hero_${i}_badge`).value.trim()
+  }));
 }
 
 // ---------- Organizaciones: 4 tarjetas ----------
@@ -435,13 +385,7 @@ async function cargarContenido() {
   actualizarPreview('h_logo_url', 'previewLogo', 'dim_h_logo_url');
 
   const hero = contenidoActual.hero || {};
-  document.getElementById('hero_titulo').value = hero.titulo || '';
-  document.getElementById('hero_subtitulo').value = hero.subtitulo_destacado || '';
-  document.getElementById('hero_descripcion').value = hero.texto_descriptivo || '';
-  document.getElementById('hero_boton_texto').value = hero.texto_boton || '';
-  document.getElementById('hero_boton_link').value = hero.link_boton || '';
-  document.getElementById('hero_badge').value = hero.badge_texto || '';
-  renderFilasImagenes(hero.imagenes);
+  renderSlidesHero(hero.slides);
 
   renderTarjetasOrg((contenidoActual.organizaciones_cards || {}).tarjetas);
 
@@ -481,15 +425,7 @@ function payloadDeSeccion(clave) {
         mostrar_texto_junto_logo: !document.getElementById('h_ocultar_texto_logo').checked
       };
     case 'hero':
-      return {
-        titulo: document.getElementById('hero_titulo').value.trim(),
-        subtitulo_destacado: document.getElementById('hero_subtitulo').value.trim(),
-        texto_descriptivo: document.getElementById('hero_descripcion').value.trim(),
-        texto_boton: document.getElementById('hero_boton_texto').value.trim(),
-        link_boton: document.getElementById('hero_boton_link').value.trim(),
-        badge_texto: document.getElementById('hero_badge').value.trim(),
-        imagenes: leerImagenes()
-      };
+      return { slides: leerSlidesHero() };
     case 'organizaciones_cards':
       return { tarjetas: leerTarjetasOrg() };
     case 'banner_apoya':
