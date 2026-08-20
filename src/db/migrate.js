@@ -92,7 +92,12 @@ const CONTENIDO_DEFAULT = {
   header: {
     logo_url: '',
     mensaje_franja_izquierda: 'Cada compra fortalece una organización y mejora la vida de más personas.',
-    mensaje_franja_derecha: 'Juntos hacemos comunidad'
+    mensaje_franja_derecha: 'Juntos hacemos comunidad',
+    // Si el logo subido ya trae el texto "Huayca / Conectamos comunidades"
+    // dibujado adentro, este flag permite ocultar el texto duplicado que el
+    // header pinta al lado del <img>. Default true para no cambiarle el
+    // comportamiento a nadie que ya tenga un logo solo-ícono.
+    mostrar_texto_junto_logo: true
   },
   hero: {
     titulo: 'Tecnología con propósito,',

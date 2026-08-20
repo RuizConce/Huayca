@@ -84,6 +84,10 @@
       </div>
       <input type="hidden" id="h_logo_url">
       <small class="ayuda-medida" id="dim_h_logo_url">Recomendado: 400×120px, PNG con fondo transparente · máx. 400KB</small>
+      <label style="display:flex; align-items:center; gap:8px; margin-top:12px; font-size:13px;">
+        <input type="checkbox" id="h_ocultar_texto_logo" style="width:auto;">
+        Mi logo ya incluye el texto "Huayca" (ocultar texto duplicado)
+      </label>
       <div class="fila-2">
         <div><label>Mensaje franja izquierda</label><input id="h_franja_izq"></div>
         <div><label>Mensaje franja derecha</label><input id="h_franja_der"></div>
@@ -425,6 +429,9 @@ async function cargarContenido() {
   document.getElementById('h_logo_url').value = h.logo_url || '';
   document.getElementById('h_franja_izq').value = h.mensaje_franja_izquierda || '';
   document.getElementById('h_franja_der').value = h.mensaje_franja_derecha || '';
+  // El checkbox se lee/guarda invertido respecto al campo: el checkbox
+  // pregunta "¿ocultar?" mientras el campo guarda "¿mostrar?".
+  document.getElementById('h_ocultar_texto_logo').checked = (h.mostrar_texto_junto_logo === false);
   actualizarPreview('h_logo_url', 'previewLogo', 'dim_h_logo_url');
 
   const hero = contenidoActual.hero || {};
@@ -470,7 +477,8 @@ function payloadDeSeccion(clave) {
       return {
         logo_url: document.getElementById('h_logo_url').value.trim(),
         mensaje_franja_izquierda: document.getElementById('h_franja_izq').value.trim(),
-        mensaje_franja_derecha: document.getElementById('h_franja_der').value.trim()
+        mensaje_franja_derecha: document.getElementById('h_franja_der').value.trim(),
+        mostrar_texto_junto_logo: !document.getElementById('h_ocultar_texto_logo').checked
       };
     case 'hero':
       return {

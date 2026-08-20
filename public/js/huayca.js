@@ -173,6 +173,13 @@ const Huayca = (() => {
           el.className = claseOriginal + ' con-imagen';
         });
       }
+      // Si el logo ya trae el texto "Huayca" dibujado adentro, se oculta el
+      // texto que el header pinta al lado para no duplicarlo. Solo se
+      // esconde con === false explícito: si el campo no vino (contenido
+      // viejo, sin migrar) se sigue mostrando, igual que antes.
+      document.querySelectorAll('.logo-texto').forEach((el) => {
+        el.style.display = (h.mostrar_texto_junto_logo === false) ? 'none' : '';
+      });
     }
 
     const f = contenido.footer;
