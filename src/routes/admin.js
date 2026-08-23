@@ -157,6 +157,24 @@ router.patch('/organizaciones/:id/suspender', async (req, res) => {
   }
 });
 
+// PATCH /api/admin/organizaciones/:id/reactivar (rechazada o suspendida -> aprobada)
+router.patch('/organizaciones/:id/reactivar', async (req, res) => {
+  try {
+    const [result] = await db.query(
+      `UPDATE organizaciones SET estado = 'aprobada', aprobada_por = ?, aprobada_at = NOW()
+       WHERE id = ? AND estado IN ('rechazada', 'suspendida')`,
+      [req.user.id, req.params.id]
+    );
+    if (!result.affectedRows) {
+      return res.status(409).json({ error: 'La organización no existe o no está rechazada ni suspendida' });
+    }
+    res.json({ ok: true, mensaje: 'Organización reactivada' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al reactivar organización' });
+  }
+});
+
 // -------------------------------------------------
 // PROVEEDORES (CRUD)
 // -------------------------------------------------

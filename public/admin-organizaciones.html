@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Huayca — Organizaciones</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, 'Segoe UI', sans-serif; margin: 0; background: #f4f5f2; color: #1a1a1a; }
+  header { background: #0d2b4e; color: white; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  header h1 { font-size: 18px; margin: 0; }
+  header .der { display: flex; align-items: center; gap: 10px; }
+  header a.volver { color: #ffffffcc; font-size: 13px; }
+  header button { background: transparent; border: 1px solid #ffffff55; color: white; padding: 6px 12px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+  main { max-width: 900px; margin: 0 auto; padding: 20px; }
+  .hidden { display: none !important; }
+
+  /* Tabs por estado */
+  .tabs { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
+  .tab {
+    background: white; border: 1px solid #e4e2db; color: #555; padding: 8px 16px;
+    border-radius: 20px; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .tab .contador { color: #999; font-weight: 400; }
+  .tab.activo { background: #0d2b4e; border-color: #0d2b4e; color: white; }
+  .tab.activo .contador { color: #ffffffaa; }
+
+  /* Lista de organizaciones */
+  .org-card { background: white; border-radius: 12px; margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow: hidden; }
+  .org-fila { display: flex; align-items: center; gap: 14px; padding: 14px 18px; cursor: pointer; }
+  .org-fila:active { opacity: 0.85; }
+  .org-info { flex: 1; min-width: 0; }
+  .org-info h3 { margin: 0 0 3px; font-size: 15px; color: #0d2b4e; }
+  .org-meta { font-size: 12.5px; color: #888; display: flex; flex-wrap: wrap; gap: 4px 10px; }
+  .org-fecha { font-size: 12px; color: #aaa; white-space: nowrap; }
+  .org-chevron { color: #ccc; font-size: 13px; transition: transform 0.15s; flex-shrink: 0; }
+  .org-card.abierta .org-chevron { transform: rotate(90deg); }
+
+  .estado-badge { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 10px; white-space: nowrap; }
+  .estado-badge.pendiente { background: #fdf0e2; color: #e8801e; }
+  .estado-badge.aprobada { background: #e7f5ec; color: #1e8e3e; }
+  .estado-badge.rechazada { background: #fdeeee; color: #c0392b; }
+  .estado-badge.suspendida { background: #eef1f6; color: #556; }
+
+  .org-detalle { display: none; padding: 0 18px 18px; border-top: 1px solid #f0efe9; }
+  .org-card.abierta .org-detalle { display: block; }
+  .org-detalle .campo { margin-top: 14px; }
+  .org-detalle .campo label { display: block; font-size: 12px; color: #999; margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.02em; }
+  .org-detalle .campo p { margin: 0; font-size: 14px; color: #333; white-space: pre-wrap; }
+  .org-acciones { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+  .btn-aprobar { background: #1e8e3e; color: white; border: none; padding: 9px 18px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .btn-rechazar { background: #fdf1f0; color: #c0392b; border: 1px solid #f5c6c1; padding: 9px 18px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .btn-suspender { background: #fdf0e2; color: #e8801e; border: 1px solid #f5dcb8; padding: 9px 18px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .btn-reactivar { background: #0d2b4e; color: white; border: none; padding: 9px 18px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .org-acciones button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  .estado-vacio { text-align: center; padding: 50px 20px; color: #999; font-size: 14px; }
+  #estadoCarga { text-align: center; padding: 60px 20px; color: #888; }
+
+  /* Confirmación breve, tipo toast */
+  #toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: #0d2b4e; color: white; padding: 12px 22px; border-radius: 24px;
+    font-size: 13.5px; font-weight: 600; box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.2s, transform 0.2s;
+  }
+  #toast.visible { opacity: 1; transform: translateX(-50%) translateY(-4px); }
+  #toast.error { background: #c0392b; }
+
+  #errorBanner { background: #fdeeee; color: #c0392b; padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <a href="admin.html" class="volver">← Volver al panel</a>
+    <h1 style="margin-top:4px;">🤝 Organizaciones</h1>
+  </div>
+  <div class="der">
+    <button onclick="cerrarSesion()">Cerrar sesión</button>
+  </div>
+</header>
+
+<main>
+  <div id="estadoCarga">Cargando organizaciones…</div>
+
+  <div id="app" class="hidden">
+    <div id="errorBanner" class="hidden"></div>
+
+    <div class="tabs" id="tabs">
+      <button type="button" class="tab" data-estado="pendiente" onclick="cambiarTab('pendiente')">Pendientes <span class="contador" id="contador_pendiente"></span></button>
+      <button type="button" class="tab" data-estado="aprobada" onclick="cambiarTab('aprobada')">Aprobadas <span class="contador" id="contador_aprobada"></span></button>
+      <button type="button" class="tab" data-estado="rechazada" onclick="cambiarTab('rechazada')">Rechazadas <span class="contador" id="contador_rechazada"></span></button>
+      <button type="button" class="tab" data-estado="suspendida" onclick="cambiarTab('suspendida')">Suspendidas <span class="contador" id="contador_suspendida"></span></button>
+    </div>
+
+    <div id="listaOrgs"></div>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<script>
+const BASE_URL = window.location.origin;
+const token = localStorage.getItem('huayca_admin_token') || '';
+if (!token) window.location.href = 'admin.html';
+
+let estadoActual = 'pendiente';
+let orgsCache = [];
+let orgAbiertaId = null;
+
+const TIPO_LABEL = {
+  colegio: 'Colegio',
+  junta_vecinos: 'Junta de vecinos',
+  club_deportivo: 'Club deportivo',
+  fundacion: 'Fundación',
+  centro_comunitario: 'Centro comunitario',
+  otro: 'Otro'
+};
+const ESTADO_LABEL = { pendiente: 'Pendiente', aprobada: 'Aprobada', rechazada: 'Rechazada', suspendida: 'Suspendida' };
+
+function cerrarSesion() {
+  localStorage.removeItem('huayca_admin_token');
+  window.location.href = 'admin.html';
+}
+
+function authHeaders() {
+  return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
+}
+
+async function apiFetch(path, options = {}) {
+  const res = await fetch(BASE_URL + path, { ...options, headers: { ...authHeaders(), ...(options.headers || {}) } });
+  if (res.status === 401 || res.status === 403) {
+    cerrarSesion();
+    throw new Error('Sesión expirada, inicia sesión de nuevo');
+  }
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Error en la petición');
+  return data;
+}
+
+function mostrarError(msg) {
+  const banner = document.getElementById('errorBanner');
+  banner.textContent = msg;
+  banner.classList.remove('hidden');
+  setTimeout(() => banner.classList.add('hidden'), 5000);
+}
+
+let toastTimeoutId = null;
+function mostrarToast(msg, esError) {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.classList.toggle('error', !!esError);
+  toast.classList.add('visible');
+  if (toastTimeoutId) clearTimeout(toastTimeoutId);
+  toastTimeoutId = setTimeout(() => toast.classList.remove('visible'), 3000);
+}
+
+function formatoFecha(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+// ---------- Tabs ----------
+function cambiarTab(estado) {
+  estadoActual = estado;
+  orgAbiertaId = null;
+  document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('activo', b.dataset.estado === estado));
+  cargarOrganizaciones();
+}
+
+// ---------- Lista ----------
+async function cargarOrganizaciones() {
+  const lista = document.getElementById('listaOrgs');
+  lista.innerHTML = '<div class="estado-vacio">Cargando…</div>';
+  try {
+    const data = await apiFetch('/api/admin/organizaciones?estado=' + estadoActual);
+    orgsCache = Array.isArray(data) ? data : (data.organizaciones || []);
+    renderLista();
+    actualizarContadores();
+  } catch (e) {
+    mostrarError(e.message);
+    lista.innerHTML = '';
+  }
+}
+
+// Los contadores de cada tab se piden aparte (uno por estado) para que se
+// vean de un vistazo sin tener que entrar a cada pestaña. No bloquea el
+// render de la lista principal si alguno falla.
+async function actualizarContadores() {
+  ['pendiente', 'aprobada', 'rechazada', 'suspendida'].forEach(async (estado) => {
+    if (estado === estadoActual) {
+      document.getElementById('contador_' + estado).textContent = orgsCache.length ? `(${orgsCache.length})` : '';
+      return;
+    }
+    try {
+      const data = await apiFetch('/api/admin/organizaciones?estado=' + estado);
+      const n = (Array.isArray(data) ? data : (data.organizaciones || [])).length;
+      document.getElementById('contador_' + estado).textContent = n ? `(${n})` : '';
+    } catch (e) { /* silencioso: el contador es solo referencia */ }
+  });
+}
+
+function renderLista() {
+  const lista = document.getElementById('listaOrgs');
+  if (!orgsCache.length) {
+    lista.innerHTML = `<div class="estado-vacio">No hay organizaciones en estado "${ESTADO_LABEL[estadoActual]}".</div>`;
+    return;
+  }
+  lista.innerHTML = orgsCache.map((o) => {
+    const abierta = orgAbiertaId === o.id;
+    const ubicacion = [o.comuna, o.region].filter(Boolean).join(', ') || 'Sin comuna/región';
+    return `
+      <div class="org-card ${abierta ? 'abierta' : ''}" id="org_${o.id}">
+        <div class="org-fila" onclick="toggleOrg(${o.id})">
+          <div class="org-info">
+            <h3>${o.nombre}</h3>
+            <div class="org-meta">
+              <span>${TIPO_LABEL[o.tipo] || 'Otro'}</span> ·
+              <span>${o.email}</span> ·
+              <span>${ubicacion}</span>
+            </div>
+          </div>
+          <div class="org-fecha">${formatoFecha(o.created_at)}</div>
+          <span class="estado-badge ${o.estado}">${ESTADO_LABEL[o.estado] || o.estado}</span>
+          <span class="org-chevron">▶</span>
+        </div>
+        <div class="org-detalle">
+          ${renderDetalle(o)}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderDetalle(o) {
+  const proyecto = (o.descripcion_proyecto || '').trim();
+  return `
+    <div class="campo">
+      <label>Para qué usarán los fondos</label>
+      <p>${proyecto || 'No especificado.'}</p>
+    </div>
+    <div class="campo">
+      <label>Teléfono</label>
+      <p>${o.telefono || 'No especificado.'}</p>
+    </div>
+    <div class="org-acciones" id="acciones_${o.id}">
+      ${renderAcciones(o)}
+    </div>
+  `;
+}
+
+function renderAcciones(o) {
+  if (o.estado === 'pendiente') {
+    return `
+      <button class="btn-aprobar" onclick="event.stopPropagation(); ejecutarAccion(${o.id}, 'aprobar', 'Organización aprobada ✓')">✓ Aprobar</button>
+      <button class="btn-rechazar" onclick="event.stopPropagation(); ejecutarAccion(${o.id}, 'rechazar', 'Organización rechazada')">✕ Rechazar</button>
+    `;
+  }
+  if (o.estado === 'aprobada') {
+    return `<button class="btn-suspender" onclick="event.stopPropagation(); ejecutarAccion(${o.id}, 'suspender', 'Organización suspendida')">⏸ Suspender</button>`;
+  }
+  // 'rechazada' o 'suspendida'
+  return `<button class="btn-reactivar" onclick="event.stopPropagation(); ejecutarAccion(${o.id}, 'reactivar', 'Organización reactivada ✓')">↻ Reactivar</button>`;
+}
+
+function toggleOrg(id) {
+  orgAbiertaId = orgAbiertaId === id ? null : id;
+  renderLista();
+}
+
+// Deshabilita los botones de esa tarjeta mientras la acción está en vuelo
+// (evita doble-click disparando dos PATCH seguidos), llama al endpoint, y
+// si sale bien recarga la pestaña actual + muestra el toast de confirmación.
+async function ejecutarAccion(id, accion, mensajeOk) {
+  const cont = document.getElementById('acciones_' + id);
+  if (cont) cont.querySelectorAll('button').forEach((b) => b.disabled = true);
+  try {
+    await apiFetch(`/api/admin/organizaciones/${id}/${accion}`, { method: 'PATCH' });
+    mostrarToast(mensajeOk);
+    orgAbiertaId = null;
+    await cargarOrganizaciones();
+  } catch (e) {
+    mostrarToast(e.message, true);
+    if (cont) cont.querySelectorAll('button').forEach((b) => b.disabled = false);
+  }
+}
+
+// ---------- Init ----------
+document.querySelector('.tab[data-estado="pendiente"]').classList.add('activo');
+document.getElementById('estadoCarga').classList.add('hidden');
+document.getElementById('app').classList.remove('hidden');
+cargarOrganizaciones();
+</script>
+
+</body>
+</html>
