@@ -44,11 +44,16 @@ router.post('/preferencia', async (req, res) => {
         }],
         external_reference: pedido.codigo,
         notification_url: process.env.MP_NOTIFICATION_URL || (baseUrl ? `${baseUrl}/api/pagos/webhook` : undefined),
+        // Las 3 rutas de vuelta apuntan al mismo archivo estático
+        // (public/pago-resultado.html) con un query param que distingue el
+        // caso — la página igual reconsulta GET /api/pedidos/:codigo como
+        // fuente de verdad (nunca confía solo en por qué back_url volvió),
+        // porque el webhook puede demorar unos segundos más que el redirect.
         back_urls: baseUrl
           ? {
-              success: `${baseUrl}/pago/exito?pedido=${pedido.codigo}`,
-              failure: `${baseUrl}/pago/error?pedido=${pedido.codigo}`,
-              pending: `${baseUrl}/pago/pendiente?pedido=${pedido.codigo}`
+              success: `${baseUrl}/pago-resultado.html?pedido=${pedido.codigo}&resultado=exito`,
+              failure: `${baseUrl}/pago-resultado.html?pedido=${pedido.codigo}&resultado=error`,
+              pending: `${baseUrl}/pago-resultado.html?pedido=${pedido.codigo}&resultado=pendiente`
             }
           : undefined,
         auto_return: baseUrl ? 'approved' : undefined,

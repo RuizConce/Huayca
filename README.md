@@ -41,7 +41,7 @@ HTML/CSS/JS plano, sin build step, mismo patrón que `admin.html` — servido po
 - **`index.html`** — home: hero, tipos de organización, productos destacados (`GET /api/productos`), bloque de impacto y confianza.
 - **`catalogo.html`** — grid de productos con filtro por categoría (chips + `?categoria=`) y buscador (`?q=`).
 - **`producto.html?slug=X`** — ficha de producto (`GET /api/productos/:slug`); es el punto de entrada del link compartible de una organización: `.../producto.html?slug=gps-vehicular&org=colegio-los-andes`.
-- **`checkout.html?slug=X`** — formulario de datos + resumen, `POST /api/pedidos`, pantalla de confirmación con el código del pedido. No cobra nada todavía (Mercado Pago queda para cuando se conecte `MP_ACCESS_TOKEN`; ver sección de comisiones más abajo).
+- **`checkout.html?slug=X`** — formulario de datos + resumen, `POST /api/pedidos`, y a continuación `POST /api/pagos/preferencia` para redirigir al comprador a pagar en Mercado Pago (`sandbox_init_point` mientras `MP_ACCESS_TOKEN` sea de prueba). Si `MP_ACCESS_TOKEN` no está configurado o falla la creación de la preferencia, no se corta el flujo: cae a la pantalla de confirmación de siempre ("pedido registrado, pendiente de pago"). Mercado Pago redirige de vuelta a `pago-resultado.html?pedido=...` (ver sección de comisiones más abajo).
 - **`organizaciones.html`** — buscador/listado público de organizaciones aprobadas (`GET /api/organizaciones?q=`), para el botón "Buscar organización".
 - **`organizacion-registro.html` / `organizacion-login.html` / `organizacion-dashboard.html`** — alta, login y dashboard de comisiones + link para compartir, usando las rutas ya documentadas más abajo.
 

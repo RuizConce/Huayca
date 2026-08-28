@@ -487,6 +487,11 @@ footer.site ul a:hover { color: #fff; }
 }
 .confirmacion .check { width: 64px; height: 64px; border-radius: 50%; background: var(--green-light); color: var(--green-dark);
   display: flex; align-items: center; justify-content: center; font-size: 30px; margin: 0 auto 18px; }
+/* Variantes de .check para las páginas de vuelta de Mercado Pago
+   (pago-resultado.html): mismo círculo, pero en naranjo (pendiente) o rojo
+   (rechazado) en vez del verde de "aprobado" por defecto. */
+.confirmacion .check.pendiente { background: var(--orange-light); color: var(--orange); }
+.confirmacion .check.error { background: #fdeeee; color: #c0392b; }
 .confirmacion h2 { color: var(--navy); margin: 0 0 8px; }
 .confirmacion .codigo { font-size: 22px; font-weight: 800; color: var(--green-dark); background: var(--green-light);
   display: inline-block; padding: 8px 18px; border-radius: var(--radius-sm); margin: 14px 0; letter-spacing: 0.02em; }

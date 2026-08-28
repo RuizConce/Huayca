@@ -89,7 +89,7 @@ function renderResumen() {
       <div class="resumen-linea"><span>Subtotal</span><span id="resumenSubtotal">${Huayca.formatoCLP(total)}</span></div>
       <div class="resumen-linea total"><span>Total</span><span id="resumenTotal">${Huayca.formatoCLP(total)}</span></div>
       <p style="font-size:12px;color:var(--text-soft);margin-top:10px;">
-        El pago se coordina después de confirmar el pedido (Mercado Pago) — todavía no se te cobra nada acá.
+        Al confirmar te llevamos a Mercado Pago para completar el pago de forma segura.
       </p>
     </div>
   `;
@@ -195,6 +195,29 @@ async function enviarPedido(e) {
   btn.textContent = 'Enviando…';
   try {
     const resultado = await Huayca.apiFetch('/api/pedidos', { method: 'POST', body: JSON.stringify(payload) });
+
+    // El pedido ya existe (con stock reservado) pase lo que pase de acá en
+    // adelante. Intentamos generar la preferencia de pago y mandar al
+    // comprador directo a Mercado Pago a pagar — pero si eso falla (Mercado
+    // Pago no está configurado todavía, o algo se cae de la API), no lo
+    // dejamos colgado con un error: cae a la pantalla de "pedido
+    // registrado, pendiente de pago" de siempre, que sigue siendo un
+    // estado válido (alguien de Huayca coordina el pago a mano).
+    btn.textContent = 'Redirigiendo a Mercado Pago…';
+    try {
+      const pago = await Huayca.apiFetch('/api/pagos/preferencia', {
+        method: 'POST',
+        body: JSON.stringify({ pedido_codigo: resultado.codigo })
+      });
+      const urlPago = pago.sandbox_init_point || pago.init_point;
+      if (urlPago) {
+        window.location.href = urlPago;
+        return; // no seguir ejecutando: ya estamos navegando afuera
+      }
+    } catch (errPago) {
+      console.error('[Huayca] No se pudo iniciar el pago con Mercado Pago, el pedido queda pendiente:', errPago.message);
+    }
+
     document.getElementById('codigoPedido').textContent = resultado.codigo;
     document.getElementById('orgAtribuidaInfo').textContent = resultado.organizacion_atribuida
       ? `Esta compra apoya a ${resultado.organizacion_atribuida}.`

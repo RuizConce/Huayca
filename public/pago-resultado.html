@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Huayca — Resultado del pago</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="css/huayca.css">
+</head>
+<body>
+
+<div class="anuncio-bar">
+  <div class="container">
+    <span id="franjaIzq">💚 Cada compra fortalece una organización y mejora la vida de más personas.</span>
+    <span class="der" id="franjaDer">Juntos hacemos comunidad</span>
+  </div>
+</div>
+
+<header class="site">
+  <div class="nav-principal">
+    <a href="index.html" class="logo">
+      <div class="logo-mark">H</div>
+      <div class="logo-texto"><b>Huayca</b><span>CONECTAMOS COMUNIDADES</span></div>
+    </a>
+  </div>
+</header>
+
+<main>
+  <div id="vistaResultado" class="container">
+    <div class="confirmacion">
+      <div class="check" id="checkIcono">⏳</div>
+      <h2 id="tituloResultado">Confirmando tu pago…</h2>
+      <p class="info" id="mensajeResultado">Un momento, estamos verificando el estado de tu pago con Mercado Pago.</p>
+      <div class="codigo hidden" id="codigoPedido"></div>
+      <p class="info hidden" id="comisionInfo">Si tu compra fue a través del link de una organización, su comisión ya quedó activada.</p>
+      <div id="accionesResultado" style="margin-top:14px;"></div>
+    </div>
+  </div>
+</main>
+
+<footer class="site">
+  <div class="container footer-bottom" style="border-top:1px solid rgba(255,255,255,0.1); margin-top:0;">
+    <span>© 2026 Huayca. Todos los derechos reservados.</span>
+    <span class="firma">Juntos hacemos comunidad.</span>
+  </div>
+</footer>
+
+<script src="js/huayca.js"></script>
+<script>
+// Esta página es el destino de las 3 back_urls que Mercado Pago usa para
+// volver al sitio (success/failure/pending, ver src/routes/pagos.js) —
+// las 3 apuntan acá con un query param `resultado` distinto, en vez de ser
+// 3 archivos separados con el mismo layout repetido 3 veces.
+//
+// El query param `resultado` (y los que Mercado Pago agrega solo, como
+// `collection_status`) son solo una pista para pintar algo de inmediato:
+// la fuente de verdad real es siempre GET /api/pedidos/:codigo, que refleja
+// lo que el webhook (que corre server-to-server, nunca lo que le llega al
+// navegador) ya confirmó. El redirect del comprador puede llegar unos
+// segundos antes que el webhook, así que si esperábamos un pago aprobado y
+// el pedido todavía figura "pendiente", reintentamos la consulta un par de
+// veces antes de resignarnos a mostrar el estado "pendiente".
+const params = new URLSearchParams(window.location.search);
+const codigoPedido = params.get('pedido') || params.get('external_reference') || '';
+const resultadoHint = params.get('resultado') || 'pendiente';
+
+function setVista({ icono, claseIcono, titulo, mensaje, mostrarCodigo, mostrarComision, acciones }) {
+  const check = document.getElementById('checkIcono');
+  check.textContent = icono;
+  check.className = 'check' + (claseIcono ? ' ' + claseIcono : '');
+  document.getElementById('tituloResultado').textContent = titulo;
+  document.getElementById('mensajeResultado').textContent = mensaje;
+
+  const codEl = document.getElementById('codigoPedido');
+  if (mostrarCodigo && codigoPedido) {
+    codEl.textContent = codigoPedido;
+    codEl.classList.remove('hidden');
+  } else {
+    codEl.classList.add('hidden');
+  }
+
+  document.getElementById('comisionInfo').classList.toggle('hidden', !mostrarComision);
+  document.getElementById('accionesResultado').innerHTML = acciones || '';
+}
+
+function vistaAprobado() {
+  setVista({
+    icono: '✓',
+    titulo: '¡Gracias por tu compra!',
+    mensaje: 'Tu pago fue aprobado. Ya empezamos a coordinar la entrega de tu pedido.',
+    mostrarCodigo: true,
+    mostrarComision: true,
+    acciones: '<a href="catalogo.html" class="btn btn-outline-green">Seguir comprando</a>'
+  });
+}
+
+function vistaPendiente() {
+  setVista({
+    icono: '⏳',
+    claseIcono: 'pendiente',
+    titulo: 'Estamos confirmando tu pago',
+    mensaje: 'Elegiste un medio de pago que demora en confirmarse (ej. transferencia o efectivo). Te avisaremos por email apenas Mercado Pago confirme el pago — no hace falta que hagas nada más.',
+    mostrarCodigo: true,
+    mostrarComision: false,
+    acciones: '<a href="catalogo.html" class="btn btn-outline-green">Volver al catálogo</a>'
+  });
+}
+
+function vistaRechazado() {
+  setVista({
+    icono: '✕',
+    claseIcono: 'error',
+    titulo: 'El pago no se pudo completar',
+    mensaje: 'Mercado Pago rechazó o canceló el intento de pago. Tu pedido no se perdió: podés volver a intentarlo desde el catálogo cuando quieras.',
+    mostrarCodigo: true,
+    mostrarComision: false,
+    acciones: '<a href="catalogo.html" class="btn btn-primary">Volver a intentar</a>'
+  });
+}
+
+function vistaSinCodigo() {
+  setVista({
+    icono: '?',
+    claseIcono: 'pendiente',
+    titulo: 'No encontramos información del pedido',
+    mensaje: 'Este link no incluye un código de pedido válido. Si venís de un pago con Mercado Pago, revisá tu email de confirmación o contáctanos.',
+    mostrarCodigo: false,
+    mostrarComision: false,
+    acciones: '<a href="catalogo.html" class="btn btn-outline-green">Ir al catálogo</a>'
+  });
+}
+
+async function consultarPedido() {
+  try {
+    return await Huayca.apiFetch('/api/pedidos/' + encodeURIComponent(codigoPedido));
+  } catch (e) {
+    return null;
+  }
+}
+
+function esperar(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
+
+async function cargar() {
+  if (!codigoPedido) { vistaSinCodigo(); return; }
+
+  // Solo insistimos con reintentos si esperábamos un pago aprobado (el
+  // caso típico de carrera con el webhook); si Mercado Pago ya nos dijo que
+  // fue pendiente o rechazado, no hay nada que "esperar a que confirme".
+  const maxIntentos = resultadoHint === 'exito' ? 5 : 1;
+  let pedido = null;
+  for (let intento = 0; intento < maxIntentos; intento++) {
+    pedido = await consultarPedido();
+    if (pedido && pedido.estado_pago !== 'pendiente') break;
+    if (intento < maxIntentos - 1) await esperar(1800);
+  }
+
+  if (!pedido) {
+    // No pudimos confirmar nada contra el backend (pedido no encontrado, o
+    // la API no respondió): mostramos algo acorde a lo que Mercado Pago
+    // dijo en el redirect en vez de dejar la pantalla en blanco.
+    if (resultadoHint === 'error') vistaRechazado();
+    else vistaPendiente();
+    return;
+  }
+
+  if (pedido.estado_pago === 'aprobado') vistaAprobado();
+  else if (pedido.estado_pago === 'rechazado') vistaRechazado();
+  else vistaPendiente();
+}
+
+cargar();
+</script>
+
+</body>
+</html>
