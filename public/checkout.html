@@ -209,7 +209,12 @@ async function enviarPedido(e) {
         method: 'POST',
         body: JSON.stringify({ pedido_codigo: resultado.codigo })
       });
-      const urlPago = pago.sandbox_init_point || pago.init_point;
+      // El backend ya decide cuál de los dos (init_point vs
+      // sandbox_init_point) corresponde según el tipo de credencial
+      // configurada (ver elegirUrlCheckout en src/routes/pagos.js) — acá
+      // no se elige entre los dos, se usa checkout_url directo. El
+      // fallback solo cubre una respuesta vieja/inesperada sin ese campo.
+      const urlPago = pago.checkout_url || pago.init_point || pago.sandbox_init_point;
       if (urlPago) {
         window.location.href = urlPago;
         return; // no seguir ejecutando: ya estamos navegando afuera

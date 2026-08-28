@@ -5,12 +5,35 @@ const db = require('../config/db');
 const mpClient = require('../config/mercadopago');
 const { aprobarPagoPedido, rechazarPagoPedido } = require('../services/pagos.service');
 
+// Mercado Pago siempre devuelve ambos campos al crear una preferencia
+// (init_point e sandbox_init_point), sin importar qué token se haya usado
+// para crearla — no hay forma de pedirle "dame solo el real". La URL
+// correcta para redirigir al comprador depende del tipo de credencial
+// configurada, no de cuál de los dos campos "parece" venir lleno:
+// - MP_ACCESS_TOKEN empieza con "APP_USR-" (producción) -> init_point
+// - MP_ACCESS_TOKEN empieza con "TEST-" (prueba)         -> sandbox_init_point
+// Se lee process.env.MP_ACCESS_TOKEN en cada llamada (no un booleano
+// cacheado en config) para que cambiar la credencial en Railway alcance
+// solo con reiniciar el servicio, sin tocar código, en cualquier
+// dirección (volver a probar con TEST- también sigue funcionando solo).
+function esTokenDeProduccion() {
+  return (process.env.MP_ACCESS_TOKEN || '').startsWith('APP_USR-');
+}
+
+function elegirUrlCheckout(resultadoPreferencia) {
+  return esTokenDeProduccion()
+    ? resultadoPreferencia.init_point
+    : resultadoPreferencia.sandbox_init_point;
+}
+
 // POST /api/pagos/preferencia
 // Body: { pedido_codigo }
 //
 // Crea la preferencia de pago en Mercado Pago para un pedido ya creado
 // (POST /api/pedidos) que todavía esté con estado_pago = 'pendiente'.
-// El front debe redirigir al cliente a `init_point`.
+// El front debe redirigir al cliente a `checkout_url` (ver
+// elegirUrlCheckout arriba) — init_point/sandbox_init_point quedan en la
+// respuesta solo como referencia/debug, no para que el front elija.
 router.post('/preferencia', async (req, res) => {
   try {
     if (!mpClient) {
@@ -69,6 +92,7 @@ router.post('/preferencia', async (req, res) => {
 
     res.status(201).json({
       preference_id: resultado.id,
+      checkout_url: elegirUrlCheckout(resultado),
       init_point: resultado.init_point,
       sandbox_init_point: resultado.sandbox_init_point
     });
