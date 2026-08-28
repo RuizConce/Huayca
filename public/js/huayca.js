@@ -8,6 +8,7 @@ const Huayca = (() => {
   const ORG_DATA_KEY = 'huayca_org_activa_datos'; // cache liviana {nombre, logo_url}
   const ORG_TOKEN_KEY = 'huayca_org_token';
   const ORG_SESION_KEY = 'huayca_org_sesion';
+  const SESSION_ID_KEY = 'huayca_session_id'; // ver trackEvento() más abajo
 
   // ---------- Fetch a la API ----------
   async function apiFetch(path, options = {}) {
@@ -23,6 +24,44 @@ const Huayca = (() => {
       throw err;
     }
     return data;
+  }
+
+  // ---------- Tracking del embudo de conversión ----------
+  // session_id identifica una visita (no una cuenta): se genera una vez y
+  // se guarda en sessionStorage, así que sobrevive mientras el visitante
+  // navega entre producto → checkout → confirmación, pero no entre visitas
+  // distintas (a propósito: sessionStorage, no localStorage).
+  function getSessionId() {
+    try {
+      let id = sessionStorage.getItem(SESSION_ID_KEY);
+      if (!id) {
+        id = (window.crypto && crypto.randomUUID)
+          ? crypto.randomUUID()
+          : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+        sessionStorage.setItem(SESSION_ID_KEY, id);
+      }
+      return id;
+    } catch (e) {
+      // sessionStorage puede tirar en navegadores con storage bloqueado
+      // (modo privado estricto, cookies de terceros deshabilitadas, etc.):
+      // un id que no persiste entre llamadas sigue siendo mejor que romper
+      // la página por esto.
+      return `sin-storage-${Date.now()}`;
+    }
+  }
+
+  // Dispara un evento del embudo (vista_producto / agregar_carrito /
+  // inicio_checkout / compra_completada) hacia POST /api/eventos. Es
+  // "fire and forget" real: no se espera ni se propaga ningún error — el
+  // tracking nunca debe condicionar ni demorar el flujo de compra.
+  function trackEvento(tipo, datos = {}) {
+    try {
+      fetch(BASE_URL + '/api/eventos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tipo, session_id: getSessionId(), ...datos })
+      }).catch(() => { /* best-effort: una notificación que no llega no debe verse */ });
+    } catch (e) { /* idem, por si fetch ni siquiera existe/está permitido */ }
   }
 
   // ---------- Formato ----------
@@ -447,7 +486,8 @@ const Huayca = (() => {
     getOrgActivaSlug, getOrgActivaDatos, limpiarOrgActiva, pintarBannerOrg,
     guardarSesionOrg, getTokenOrg, getSesionOrg, cerrarSesionOrg,
     iconoProducto, inicializarHeader,
-    cargarContenidoSitio, aplicarHeaderFooter, aplicarContenidoHome, iniciarCarruselHero
+    cargarContenidoSitio, aplicarHeaderFooter, aplicarContenidoHome, iniciarCarruselHero,
+    trackEvento
   };
 })();
 

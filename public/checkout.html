@@ -64,6 +64,7 @@
 <script>
 let productoActual = null;
 let cantidadActual = 1;
+let organizacionIdActual = null; // resuelta una vez en cargarCheckout, reusada en enviarPedido
 
 function renderResumen() {
   const p = productoActual;
@@ -155,6 +156,12 @@ async function cargarCheckout() {
     wireCantidad();
 
     document.getElementById('formCheckout').addEventListener('submit', enviarPedido);
+
+    // Tracking del embudo (fire-and-forget): llegar acá con un producto
+    // válido cargado es "inicio_checkout", pase lo que pase después.
+    const orgDatos = await Huayca.getOrgActivaDatos();
+    organizacionIdActual = orgDatos ? orgDatos.id : null;
+    Huayca.trackEvento('inicio_checkout', { producto_id: productoActual.id, organizacion_id: organizacionIdActual });
   } catch (e) {
     cont.innerHTML = '<div class="estado-vacio">No encontramos este producto. <a href="catalogo.html">Volver al catálogo</a>.</div>';
   }
@@ -195,6 +202,16 @@ async function enviarPedido(e) {
   btn.textContent = 'Enviando…';
   try {
     const resultado = await Huayca.apiFetch('/api/pedidos', { method: 'POST', body: JSON.stringify(payload) });
+
+    // "compra_completada" marca que el pedido se creó (el checkout se
+    // completó), no que el pago ya se aprobó — eso lo confirma el webhook
+    // de Mercado Pago por su cuenta y ya queda registrado en
+    // pedidos.estado_pago, no en el embudo de conversión.
+    Huayca.trackEvento('compra_completada', {
+      producto_id: productoActual.id,
+      organizacion_id: organizacionIdActual,
+      pedido_id: resultado.pedido_id
+    });
 
     // El pedido ya existe (con stock reservado) pase lo que pase de acá en
     // adelante. Intentamos generar la preferencia de pago y mandar al

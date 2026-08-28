@@ -22,12 +22,16 @@ scripts/migrate.js             → corre schema.sql contra la base conectada
 scripts/seed.js                → carga admin + proveedor PROTEGE+ + productos + organización demo
 public/admin.html               → panel de administración (HTML/JS puro, sin build), servido como estático
 public/admin-contenido.html     → panel de contenido del sitio (CMS liviano), enlazado desde admin.html
-public/index.html, catalogo.html, producto.html, checkout.html,
+public/admin-organizaciones.html → aprobar/rechazar/suspender/reactivar organizaciones, enlazado desde admin.html
+public/admin-logistica.html     → pedidos aprobados pendientes de despacho, agrupados por proveedor
+public/admin-actividad.html     → dashboard del embudo de conversión (eventos_actividad)
+public/index.html, catalogo.html, producto.html, checkout.html, pago-resultado.html,
 public/organizaciones.html, organizacion-registro/login/dashboard.html
                                  → frontend público (HTML/JS puro, sin build), servido como estático
 public/css/huayca.css, public/js/huayca.js
                                  → estilos y helpers compartidos por todo el frontend público
 src/routes/contenido.js         → GET /api/contenido (público, combinado)
+src/routes/eventos.js           → POST /api/eventos (público, tracking del embudo de conversión)
 ```
 
 ## Panel de administración
@@ -114,15 +118,31 @@ La comisión acumulada de una organización no es un retiro directo:
 
 `POST /api/tickets` (público, valida email contra el pedido) y `GET /api/tickets/pedido/:codigo?email=...` para que el cliente vea el estado. El equipo Huayca gestiona la bandeja completa en `GET /api/tickets` y `PATCH /api/tickets/:id` (deriva al proveedor, responde, resuelve), según la política de Huayca y la normativa chilena de protección al consumidor — el proveedor es responsable de la garantía en sí, Huayca media vía el ticket.
 
+## Logística (`admin-logistica.html`)
+
+Vista operativa enfocada solo en lo que ya está pagado y falta despachar — a diferencia de `GET /api/admin/pedidos` (que trae todo). Filtra `estado_pago = 'aprobado'` y `estado_despacho` distinto de `entregado` **y** de `no_aplica` (un admin puede marcar a mano un pedido como "no aplica" para algo que no necesita envío, y ese tampoco debería contar como trabajo pendiente), agrupa por proveedor (cada proveedor gestiona su propio despacho, ver `proveedores.gestiona_despacho`) y ofrece un botón de "avanzar" que recorre `pendiente → preparando → enviado → entregado` llamando `PATCH /api/admin/pedidos/:id/despacho`. No agrega ningún endpoint nuevo: reutiliza `GET /api/admin/pedidos` (que ahora también devuelve `cliente_telefono`, `direccion_envio` y `proveedor_id`, campos que esta vista necesita) y el `PATCH .../despacho` que ya existía.
+
+## Actividad / embudo de conversión (`admin-actividad.html`)
+
+Trackea el recorrido de una visita — sin cuentas de usuario — vía un `session_id` que el frontend genera una vez y guarda en `sessionStorage` (`Huayca.trackEvento()` en `js/huayca.js`). Cuatro momentos del embudo se registran en `eventos_actividad` a través de `POST /api/eventos` (público, sin auth, "fire and forget": nunca bloquea ni condiciona el flujo de compra si falla):
+
+- `vista_producto` — al cargar `producto.html`.
+- `agregar_carrito` — al hacer click en "Comprar ahora" (no hay carrito real; representa la intención de compra de ese producto).
+- `inicio_checkout` — al llegar a `checkout.html` con el producto ya resuelto.
+- `compra_completada` — cuando `POST /api/pedidos` responde OK (incluye `pedido_id`). Marca que el checkout se completó, no que el pago ya se aprobó — eso lo confirma el webhook de Mercado Pago por su cuenta y queda en `pedidos.estado_pago`, un dato aparte.
+
+`GET /api/admin/actividad?desde=ISO&hasta=ISO` (por defecto, últimos 30 días) agrega todo esto: totales por tipo, tasa de abandono (`(inicio_checkout - compra_completada) / inicio_checkout`), top 5 productos más vistos, y la lista de "carritos abandonados" — sesiones con `inicio_checkout` en el rango que **nunca** (en ninguna fecha, no solo dentro del rango) dispararon `compra_completada`.
+
 ## Rutas de administración
 
 Todo bajo `/api/admin` requiere `POST /api/admin/login` primero (tabla `administradores`, no confundir con el login de organizaciones):
 
-- Organizaciones: `GET /organizaciones`, `PATCH /organizaciones/:id/aprobar`, `.../rechazar`, `.../suspender`.
+- Organizaciones: `GET /organizaciones`, `PATCH /organizaciones/:id/aprobar`, `.../rechazar`, `.../suspender`, `.../reactivar` (rechazada o suspendida → aprobada).
 - Proveedores: `GET/POST /proveedores`, `PUT/DELETE /proveedores/:id` (delete = baja lógica a `inactivo`).
 - Categorías: `GET/POST /categorias`.
 - Productos: `GET/POST /productos`, `PUT/DELETE /productos/:id` (delete = baja lógica a `pausado`). Acá se fijan `precio_proveedor`, `comision_afiliado` y `comision_huayca`.
 - Pedidos (operación): `GET /pedidos`, `PATCH /pedidos/:id/marcar-pagado`, `PATCH /pedidos/:id/despacho`.
+- Actividad: `GET /actividad?desde=&hasta=` (ver sección de arriba).
 
 ## Variables de entorno
 

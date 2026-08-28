@@ -406,9 +406,9 @@ router.get('/pedidos', async (req, res) => {
     const { estado_pago, estado_despacho } = req.query;
     let query = `
       SELECT p.id, p.codigo, p.monto_total, p.cantidad, p.estado_pago, p.estado_despacho,
-             p.estado_liquidacion, p.created_at,
-             c.nombre AS cliente_nombre, c.email AS cliente_email,
-             pr.nombre AS producto_nombre, prov.nombre AS proveedor_nombre,
+             p.estado_liquidacion, p.direccion_envio, p.created_at,
+             c.nombre AS cliente_nombre, c.email AS cliente_email, c.telefono AS cliente_telefono,
+             pr.nombre AS producto_nombre, prov.id AS proveedor_id, prov.nombre AS proveedor_nombre,
              o.nombre AS organizacion_nombre, o.slug AS organizacion_slug
       FROM pedidos p
       JOIN clientes c ON c.id = p.cliente_id
@@ -467,6 +467,81 @@ router.patch('/pedidos/:id/despacho', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error al actualizar despacho' });
+  }
+});
+
+// -------------------------------------------------
+// ACTIVIDAD (embudo de conversión, a partir de eventos_actividad)
+// -------------------------------------------------
+
+// GET /api/admin/actividad?desde=ISO&hasta=ISO
+// Sin desde/hasta, usa los últimos 30 días. Devuelve todo lo que necesita
+// el dashboard en una sola llamada: totales por tipo de evento, tasa de
+// abandono, top 5 productos más vistos, y la lista de "carritos
+// abandonados" (sessions que arrancaron el checkout pero nunca completaron
+// una compra — en ninguna fecha, no solo dentro del rango pedido, para no
+// marcar como abandonada una sesión que compró recién después del corte).
+router.get('/actividad', async (req, res) => {
+  try {
+    const hasta = req.query.hasta || new Date().toISOString();
+    const desde = req.query.desde || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    const [totalesRows] = await db.query(
+      `SELECT tipo, COUNT(*) AS total FROM eventos_actividad
+       WHERE created_at BETWEEN ? AND ? GROUP BY tipo`,
+      [desde, hasta]
+    );
+    const totales = { vista_producto: 0, agregar_carrito: 0, inicio_checkout: 0, compra_completada: 0 };
+    for (const fila of totalesRows) totales[fila.tipo] = fila.total;
+
+    const tasaAbandono = totales.inicio_checkout > 0
+      ? (totales.inicio_checkout - totales.compra_completada) / totales.inicio_checkout
+      : null; // sin checkouts iniciados, "tasa de abandono" no tiene sentido (ni 0% ni 100%)
+
+    const [productosMasVistos] = await db.query(
+      `SELECT ea.producto_id, pr.nombre AS producto_nombre, COUNT(*) AS vistas
+       FROM eventos_actividad ea
+       JOIN productos pr ON pr.id = ea.producto_id
+       WHERE ea.tipo = 'vista_producto' AND ea.created_at BETWEEN ? AND ?
+       GROUP BY ea.producto_id, pr.nombre
+       ORDER BY vistas DESC
+       LIMIT 5`,
+      [desde, hasta]
+    );
+
+    // "Última vez que esa sesión inició checkout dentro del rango" (MAX(id)
+    // como desempate determinístico) + que esa misma sesión no tenga NUNCA
+    // un evento compra_completada, sin importar la fecha.
+    const [carritosAbandonados] = await db.query(
+      `SELECT ea.session_id, ea.producto_id, pr.nombre AS producto_nombre,
+              ea.organizacion_id, o.nombre AS organizacion_nombre, ea.created_at AS iniciado_en
+       FROM eventos_actividad ea
+       JOIN (
+         SELECT session_id, MAX(id) AS ultimo_id
+         FROM eventos_actividad
+         WHERE tipo = 'inicio_checkout' AND created_at BETWEEN ? AND ?
+         GROUP BY session_id
+       ) ultimo ON ultimo.ultimo_id = ea.id
+       LEFT JOIN productos pr ON pr.id = ea.producto_id
+       LEFT JOIN organizaciones o ON o.id = ea.organizacion_id
+       WHERE ea.session_id NOT IN (
+         SELECT session_id FROM eventos_actividad WHERE tipo = 'compra_completada'
+       )
+       ORDER BY ea.created_at DESC
+       LIMIT 50`,
+      [desde, hasta]
+    );
+
+    res.json({
+      rango: { desde, hasta },
+      totales,
+      tasa_abandono: tasaAbandono,
+      productos_mas_vistos: productosMasVistos,
+      carritos_abandonados: carritosAbandonados
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al obtener la actividad' });
   }
 });
 

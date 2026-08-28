@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Huayca — Logística</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, 'Segoe UI', sans-serif; margin: 0; background: #f4f5f2; color: #1a1a1a; }
+  header { background: #0d2b4e; color: white; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  header h1 { font-size: 18px; margin: 0; }
+  header .der { display: flex; align-items: center; gap: 10px; }
+  header a.volver { color: #ffffffcc; font-size: 13px; }
+  header a.tab-link { color: #ffffffcc; font-size: 13px; }
+  header a.tab-link.activo { color: white; font-weight: 700; text-decoration: underline; }
+  header button { background: transparent; border: 1px solid #ffffff55; color: white; padding: 6px 12px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+  main { max-width: 980px; margin: 0 auto; padding: 20px; }
+  .hidden { display: none !important; }
+
+  .resumen-bar {
+    background: white; border-radius: 12px; padding: 16px 20px; margin-bottom: 16px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08); display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
+  }
+  .resumen-bar .contador { font-size: 16px; font-weight: 700; color: #0d2b4e; }
+  .resumen-bar .contador .num { color: #e8801e; font-size: 20px; }
+  .resumen-bar select { padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; background: white; }
+
+  .proveedor-grupo { background: white; border-radius: 12px; margin-bottom: 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow: hidden; }
+  .proveedor-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid #f0efe9; }
+  .proveedor-header h2 { margin: 0; font-size: 15px; color: #0d2b4e; }
+  .proveedor-header .chip { background: #fdf0e2; color: #e8801e; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 10px; }
+
+  .pedido-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; padding: 14px 18px; border-bottom: 1px solid #f6f5f0; }
+  .pedido-row:last-child { border-bottom: none; }
+  .pedido-info b.codigo { color: #0d2b4e; font-size: 13.5px; }
+  .pedido-info .producto { font-size: 13.5px; color: #333; margin-top: 2px; }
+  .pedido-info .detalle-cliente { font-size: 12.5px; color: #666; margin-top: 6px; line-height: 1.5; }
+  .pedido-info .detalle-cliente b { color: #444; }
+  .pedido-info .fecha { font-size: 11.5px; color: #999; margin-top: 4px; }
+
+  .pedido-acciones { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; flex-shrink: 0; }
+  .estado-badge { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 10px; white-space: nowrap; }
+  .estado-badge.pendiente { background: #fdf0e2; color: #e8801e; }
+  .estado-badge.preparando { background: #eef1fb; color: #3f51b5; }
+  .estado-badge.enviado { background: #e7f5ec; color: #1e8e3e; }
+  .estado-badge.entregado { background: #eef1f6; color: #556; }
+  .btn-avanzar { background: #0d2b4e; color: white; border: none; padding: 7px 14px; border-radius: 6px; font-size: 12.5px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .btn-avanzar:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  .estado-vacio { text-align: center; padding: 50px 20px; color: #999; font-size: 14px; }
+  #estadoCarga { text-align: center; padding: 60px 20px; color: #888; }
+  #errorBanner { background: #fdeeee; color: #c0392b; padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; font-size: 13px; }
+
+  #toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: #0d2b4e; color: white; padding: 12px 22px; border-radius: 24px;
+    font-size: 13.5px; font-weight: 600; box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.2s, transform 0.2s;
+  }
+  #toast.visible { opacity: 1; transform: translateX(-50%) translateY(-4px); }
+  #toast.error { background: #c0392b; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <a href="admin.html" class="volver">← Volver al panel</a>
+    <h1 style="margin-top:4px;">🚚 Logística</h1>
+  </div>
+  <div class="der">
+    <button onclick="cerrarSesion()">Cerrar sesión</button>
+  </div>
+</header>
+
+<main>
+  <div id="estadoCarga">Cargando pedidos…</div>
+
+  <div id="app" class="hidden">
+    <div id="errorBanner" class="hidden"></div>
+
+    <div class="resumen-bar">
+      <div class="contador"><span class="num" id="contadorNum">0</span> pedidos esperando despacho</div>
+      <select id="filtroProveedor" onchange="render()">
+        <option value="">Todos los proveedores</option>
+      </select>
+    </div>
+
+    <div id="grupos"></div>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<script>
+const BASE_URL = window.location.origin;
+const token = localStorage.getItem('huayca_admin_token') || '';
+if (!token) window.location.href = 'admin.html';
+
+// El endpoint ya devuelve estado_despacho='no_aplica' como un valor válido
+// (para pedidos que un admin marcó a mano como "no necesita envío", ej.
+// algo puramente digital) — acá se excluye junto con 'entregado', porque
+// ninguno de los dos representa trabajo pendiente de despacho.
+const SIGUIENTE_ESTADO = { pendiente: 'preparando', preparando: 'enviado', enviado: 'entregado' };
+const ETIQUETA_ACCION = { pendiente: '▶ Marcar preparando', preparando: '🚚 Marcar enviado', enviado: '✓ Marcar entregado' };
+const ESTADO_LABEL = { pendiente: 'Pendiente', preparando: 'Preparando', enviado: 'Enviado', entregado: 'Entregado' };
+
+let pedidosCache = [];
+
+function cerrarSesion() {
+  localStorage.removeItem('huayca_admin_token');
+  window.location.href = 'admin.html';
+}
+
+function authHeaders() {
+  return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
+}
+
+async function apiFetch(path, options = {}) {
+  const res = await fetch(BASE_URL + path, { ...options, headers: { ...authHeaders(), ...(options.headers || {}) } });
+  if (res.status === 401 || res.status === 403) {
+    cerrarSesion();
+    throw new Error('Sesión expirada, inicia sesión de nuevo');
+  }
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Error en la petición');
+  return data;
+}
+
+function mostrarError(msg) {
+  const banner = document.getElementById('errorBanner');
+  banner.textContent = msg;
+  banner.classList.remove('hidden');
+  setTimeout(() => banner.classList.add('hidden'), 5000);
+}
+
+let toastTimeoutId = null;
+function mostrarToast(msg, esError) {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.classList.toggle('error', !!esError);
+  toast.classList.add('visible');
+  if (toastTimeoutId) clearTimeout(toastTimeoutId);
+  toastTimeoutId = setTimeout(() => toast.classList.remove('visible'), 3000);
+}
+
+function formatoFecha(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function formatoDireccion(direccionEnvio) {
+  let d = direccionEnvio;
+  if (typeof d === 'string') { try { d = JSON.parse(d); } catch (e) { d = null; } }
+  if (!d) return 'Sin dirección registrada';
+  const calleNumero = [d.calle, d.numero].filter(Boolean).join(' ');
+  const resto = [d.comuna, d.region].filter(Boolean).join(', ');
+  const partes = [calleNumero, resto].filter(Boolean);
+  return partes.length ? partes.join(', ') : 'Sin dirección registrada';
+}
+
+// ---------- Carga ----------
+async function cargar() {
+  try {
+    // Se pide todo lo aprobado y se filtra/agrupa acá — el volumen de
+    // pedidos aprobados-y-sin-despachar de un marketplace de este tamaño
+    // no justifica un endpoint aparte con sus propios query params.
+    const data = await apiFetch('/api/admin/pedidos?estado_pago=aprobado');
+    pedidosCache = (Array.isArray(data) ? data : []).filter(
+      (p) => p.estado_despacho !== 'entregado' && p.estado_despacho !== 'no_aplica'
+    );
+    poblarFiltroProveedor();
+    render();
+    document.getElementById('estadoCarga').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+  } catch (e) {
+    document.getElementById('estadoCarga').textContent = 'Error al cargar: ' + e.message;
+  }
+}
+
+function poblarFiltroProveedor() {
+  const select = document.getElementById('filtroProveedor');
+  const actual = select.value;
+  const proveedores = [...new Map(pedidosCache.map((p) => [p.proveedor_id, p.proveedor_nombre])).entries()]
+    .sort((a, b) => a[1].localeCompare(b[1]));
+  select.innerHTML = '<option value="">Todos los proveedores</option>' +
+    proveedores.map(([id, nombre]) => `<option value="${id}">${nombre}</option>`).join('');
+  select.value = actual;
+}
+
+// ---------- Render ----------
+function render() {
+  const filtroId = document.getElementById('filtroProveedor').value;
+  const lista = filtroId ? pedidosCache.filter((p) => String(p.proveedor_id) === filtroId) : pedidosCache;
+
+  document.getElementById('contadorNum').textContent = lista.length;
+
+  const cont = document.getElementById('grupos');
+  if (!lista.length) {
+    cont.innerHTML = '<div class="estado-vacio">🎉 No hay pedidos esperando despacho.</div>';
+    return;
+  }
+
+  // Agrupar por proveedor, cada grupo ordenado por fecha de compra (más
+  // antiguo primero — es lo que más urge despachar).
+  const grupos = new Map();
+  lista.forEach((p) => {
+    if (!grupos.has(p.proveedor_id)) grupos.set(p.proveedor_id, { nombre: p.proveedor_nombre, pedidos: [] });
+    grupos.get(p.proveedor_id).pedidos.push(p);
+  });
+  grupos.forEach((g) => g.pedidos.sort((a, b) => new Date(a.created_at) - new Date(b.created_at)));
+
+  const gruposOrdenados = [...grupos.values()].sort((a, b) => a.nombre.localeCompare(b.nombre));
+
+  cont.innerHTML = gruposOrdenados.map((g) => `
+    <div class="proveedor-grupo">
+      <div class="proveedor-header">
+        <h2>${g.nombre}</h2>
+        <span class="chip">${g.pedidos.length} pendiente${g.pedidos.length === 1 ? '' : 's'}</span>
+      </div>
+      ${g.pedidos.map((p) => renderPedidoRow(p)).join('')}
+    </div>
+  `).join('');
+}
+
+function renderPedidoRow(p) {
+  const siguiente = SIGUIENTE_ESTADO[p.estado_despacho];
+  return `
+    <div class="pedido-row" id="pedido_${p.id}">
+      <div class="pedido-info">
+        <b class="codigo">${p.codigo}</b>
+        <div class="producto">${p.producto_nombre} × ${p.cantidad}${p.organizacion_nombre ? ` · vía ${p.organizacion_nombre}` : ''}</div>
+        <div class="detalle-cliente">
+          <b>${p.cliente_nombre}</b> · ${p.cliente_telefono || 'sin teléfono'}<br>
+          ${formatoDireccion(p.direccion_envio)}
+        </div>
+        <div class="fecha">Comprado el ${formatoFecha(p.created_at)}</div>
+      </div>
+      <div class="pedido-acciones">
+        <span class="estado-badge ${p.estado_despacho}">${ESTADO_LABEL[p.estado_despacho] || p.estado_despacho}</span>
+        ${siguiente
+          ? `<button class="btn-avanzar" onclick="avanzarDespacho(${p.id}, '${siguiente}')">${ETIQUETA_ACCION[p.estado_despacho]}</button>`
+          : ''}
+      </div>
+    </div>
+  `;
+}
+
+// ---------- Acción: avanzar estado de despacho ----------
+async function avanzarDespacho(pedidoId, nuevoEstado) {
+  const fila = document.getElementById('pedido_' + pedidoId);
+  const boton = fila ? fila.querySelector('.btn-avanzar') : null;
+  if (boton) boton.disabled = true;
+  try {
+    await apiFetch(`/api/admin/pedidos/${pedidoId}/despacho`, {
+      method: 'PATCH',
+      body: JSON.stringify({ estado_despacho: nuevoEstado })
+    });
+    mostrarToast(`Pedido actualizado a "${ESTADO_LABEL[nuevoEstado]}" ✓`);
+    // Si pasó a 'entregado' sale de esta vista (ya no espera despacho);
+    // si no, se actualiza en el lugar sin recargar todo de nuevo.
+    if (nuevoEstado === 'entregado') {
+      pedidosCache = pedidosCache.filter((p) => p.id !== pedidoId);
+    } else {
+      const p = pedidosCache.find((x) => x.id === pedidoId);
+      if (p) p.estado_despacho = nuevoEstado;
+    }
+    render();
+  } catch (e) {
+    mostrarToast(e.message, true);
+    if (boton) boton.disabled = false;
+  }
+}
+
+cargar();
+</script>
+
+</body>
+</html>

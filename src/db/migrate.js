@@ -50,6 +50,21 @@ async function ensureTable(connection, tabla, createSql) {
   return true;
 }
 
+// Igual que ensureTable, pero para índices agregados después de la primera
+// corrida de schema.sql. CREATE INDEX no es "IF NOT EXISTS" en MySQL/MariaDB
+// (a diferencia de CREATE TABLE), así que sin este chequeo reintentar la
+// migración en una base ya migrada tiraría error de índice duplicado.
+async function ensureIndex(connection, tabla, indice, definicionColumnas) {
+  const [rows] = await connection.query(
+    `SELECT COUNT(*) AS existe FROM information_schema.STATISTICS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?`,
+    [tabla, indice]
+  );
+  if (rows[0].existe > 0) return false;
+  await connection.query(`CREATE INDEX ${indice} ON ${tabla} (${definicionColumnas})`);
+  return true;
+}
+
 // Cambios de schema posteriores al schema.sql original, aplicados de forma
 // incremental e idempotente (no rompen si ya existen).
 const MIGRACIONES_INCREMENTALES = [
@@ -80,7 +95,32 @@ const TABLAS_INCREMENTALES = [
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
     `
+  },
+  {
+    tabla: 'eventos_actividad',
+    createSql: `
+      CREATE TABLE eventos_actividad (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        tipo ENUM('vista_producto','agregar_carrito','inicio_checkout','compra_completada') NOT NULL,
+        producto_id INT NULL,
+        organizacion_id INT NULL,
+        session_id VARCHAR(64) NOT NULL,
+        pedido_id INT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (producto_id) REFERENCES productos(id),
+        FOREIGN KEY (organizacion_id) REFERENCES organizaciones(id),
+        FOREIGN KEY (pedido_id) REFERENCES pedidos(id)
+      )
+    `
   }
+];
+
+// Índices agregados después de la primera corrida de schema.sql (mismo
+// motivo que TABLAS_INCREMENTALES: una base ya migrada nunca vuelve a
+// correr el CREATE INDEX que está al final de schema.sql).
+const INDICES_INCREMENTALES = [
+  { tabla: 'eventos_actividad', indice: 'idx_eventos_session', columnas: 'session_id' },
+  { tabla: 'eventos_actividad', indice: 'idx_eventos_tipo_fecha', columnas: 'tipo, created_at' }
 ];
 
 // Valores por defecto de contenido_sitio: son los textos/imágenes que ya
@@ -258,6 +298,15 @@ async function runMigration() {
   }
   if (tablasAgregadas.length) {
     resultado.mensaje += ` (tablas agregadas: ${tablasAgregadas.join(', ')})`;
+  }
+
+  const indicesAgregados = [];
+  for (const i of INDICES_INCREMENTALES) {
+    const agregado = await ensureIndex(connection, i.tabla, i.indice, i.columnas);
+    if (agregado) indicesAgregados.push(i.indice);
+  }
+  if (indicesAgregados.length) {
+    resultado.mensaje += ` (índices agregados: ${indicesAgregados.join(', ')})`;
   }
 
   const heroMigrado = await migrarHeroASlides(connection);

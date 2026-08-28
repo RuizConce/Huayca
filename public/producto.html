@@ -156,12 +156,27 @@ async function cargarProducto() {
             <span><b>Stock:</b> ${p.stock > 0 ? p.stock + ' disponibles' : 'Agotado'}</span>
             <span><b>Proveedor:</b> ${p.proveedor_nombre || '—'}</span>
           </div>
-          <a href="${p.stock > 0 ? linkCheckout : '#'}" class="btn btn-primary btn-block" ${p.stock > 0 ? '' : 'style="pointer-events:none;opacity:.5;"'}>
+          <a href="${p.stock > 0 ? linkCheckout : '#'}" id="btnComprarAhora" class="btn btn-primary btn-block" ${p.stock > 0 ? '' : 'style="pointer-events:none;opacity:.5;"'}>
             ${p.stock > 0 ? 'Comprar ahora →' : 'Sin stock'}
           </a>
         </div>
       </div>
     `;
+
+    // Tracking del embudo (fire-and-forget, ver Huayca.trackEvento): la
+    // vista se registra apenas se pinta la ficha; "agregar_carrito" recién
+    // cuando de verdad hace click en "Comprar ahora" (acá no hay carrito
+    // real — este evento representa la intención de compra de este único
+    // producto, que es lo que arranca en checkout.html).
+    const orgDatos = await Huayca.getOrgActivaDatos();
+    const organizacionId = orgDatos ? orgDatos.id : null;
+    Huayca.trackEvento('vista_producto', { producto_id: p.id, organizacion_id: organizacionId });
+    const btnComprar = document.getElementById('btnComprarAhora');
+    if (btnComprar && p.stock > 0) {
+      btnComprar.addEventListener('click', () => {
+        Huayca.trackEvento('agregar_carrito', { producto_id: p.id, organizacion_id: organizacionId });
+      });
+    }
   } catch (e) {
     cont.innerHTML = '<div class="estado-vacio">No encontramos este producto. <a href="catalogo.html">Volver al catálogo</a>.</div>';
   }

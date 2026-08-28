@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Huayca — Actividad</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, 'Segoe UI', sans-serif; margin: 0; background: #f4f5f2; color: #1a1a1a; }
+  header { background: #0d2b4e; color: white; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  header h1 { font-size: 18px; margin: 0; }
+  header .der { display: flex; align-items: center; gap: 10px; }
+  header a.volver { color: #ffffffcc; font-size: 13px; }
+  header button { background: transparent; border: 1px solid #ffffff55; color: white; padding: 6px 12px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+  main { max-width: 980px; margin: 0 auto; padding: 20px; }
+  .hidden { display: none !important; }
+
+  .rango-tabs { display: flex; gap: 8px; margin-bottom: 18px; }
+  .rango-tab {
+    background: white; border: 1px solid #e4e2db; color: #555; padding: 8px 16px;
+    border-radius: 20px; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .rango-tab.activo { background: #0d2b4e; border-color: #0d2b4e; color: white; }
+
+  .tarjetas-resumen { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+  .tarjeta { background: white; border-radius: 12px; padding: 18px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+  .tarjeta .valor { font-size: 26px; font-weight: 800; color: #0d2b4e; }
+  .tarjeta .valor.naranjo { color: #e8801e; }
+  .tarjeta .etiqueta { font-size: 12.5px; color: #888; margin-top: 4px; }
+
+  .seccion-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 18px; }
+  .seccion-card h2 { margin: 0 0 4px; color: #0d2b4e; font-size: 16px; }
+  .seccion-card .desc { color: #888; font-size: 12.5px; margin: 0 0 14px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 9px 6px; font-size: 13px; border-bottom: 1px solid #f0efe9; }
+  th { color: #999; font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.02em; }
+  td.num { text-align: right; font-weight: 700; color: #0d2b4e; }
+  .org-chip { background: #e7f5ec; color: #1e8e3e; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 8px; }
+  .sin-org { color: #bbb; font-size: 12px; }
+
+  .estado-vacio { text-align: center; padding: 30px 20px; color: #999; font-size: 13.5px; }
+  #estadoCarga { text-align: center; padding: 60px 20px; color: #888; }
+  #errorBanner { background: #fdeeee; color: #c0392b; padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; font-size: 13px; }
+
+  @media (max-width: 680px) { .tarjetas-resumen { grid-template-columns: 1fr 1fr; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <a href="admin.html" class="volver">← Volver al panel</a>
+    <h1 style="margin-top:4px;">📊 Actividad</h1>
+  </div>
+  <div class="der">
+    <button onclick="cerrarSesion()">Cerrar sesión</button>
+  </div>
+</header>
+
+<main>
+  <div id="estadoCarga">Cargando actividad…</div>
+
+  <div id="app" class="hidden">
+    <div id="errorBanner" class="hidden"></div>
+
+    <div class="rango-tabs" id="rangoTabs">
+      <button type="button" class="rango-tab" data-rango="hoy" onclick="cambiarRango('hoy')">Hoy</button>
+      <button type="button" class="rango-tab" data-rango="7d" onclick="cambiarRango('7d')">Últimos 7 días</button>
+      <button type="button" class="rango-tab" data-rango="30d" onclick="cambiarRango('30d')">Últimos 30 días</button>
+    </div>
+
+    <div class="tarjetas-resumen">
+      <div class="tarjeta">
+        <div class="valor" id="valVistas">0</div>
+        <div class="etiqueta">Vistas de producto</div>
+      </div>
+      <div class="tarjeta">
+        <div class="valor" id="valCheckouts">0</div>
+        <div class="etiqueta">Checkouts iniciados</div>
+      </div>
+      <div class="tarjeta">
+        <div class="valor" id="valCompras">0</div>
+        <div class="etiqueta">Compras completadas</div>
+      </div>
+      <div class="tarjeta">
+        <div class="valor naranjo" id="valAbandono">—</div>
+        <div class="etiqueta">Tasa de abandono</div>
+      </div>
+    </div>
+
+    <div class="seccion-card">
+      <h2>Productos más vistos</h2>
+      <p class="desc">Top 5 en el rango seleccionado.</p>
+      <table>
+        <thead><tr><th>Producto</th><th style="text-align:right;">Vistas</th></tr></thead>
+        <tbody id="tablaProductos"></tbody>
+      </table>
+      <div class="estado-vacio hidden" id="vacioProductos">Todavía no hay vistas registradas en este rango.</div>
+    </div>
+
+    <div class="seccion-card">
+      <h2>Carritos abandonados</h2>
+      <p class="desc">Sesiones que empezaron el checkout pero nunca completaron una compra.</p>
+      <table>
+        <thead><tr><th>Producto</th><th>Organización</th><th>Cuándo</th></tr></thead>
+        <tbody id="tablaAbandonados"></tbody>
+      </table>
+      <div class="estado-vacio hidden" id="vacioAbandonados">Sin carritos abandonados en este rango 🎉</div>
+    </div>
+  </div>
+</main>
+
+<script>
+const BASE_URL = window.location.origin;
+const token = localStorage.getItem('huayca_admin_token') || '';
+if (!token) window.location.href = 'admin.html';
+
+let rangoActual = '30d';
+
+function cerrarSesion() {
+  localStorage.removeItem('huayca_admin_token');
+  window.location.href = 'admin.html';
+}
+
+function authHeaders() {
+  return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
+}
+
+async function apiFetch(path, options = {}) {
+  const res = await fetch(BASE_URL + path, { ...options, headers: { ...authHeaders(), ...(options.headers || {}) } });
+  if (res.status === 401 || res.status === 403) {
+    cerrarSesion();
+    throw new Error('Sesión expirada, inicia sesión de nuevo');
+  }
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Error en la petición');
+  return data;
+}
+
+function mostrarError(msg) {
+  const banner = document.getElementById('errorBanner');
+  banner.textContent = msg;
+  banner.classList.remove('hidden');
+  setTimeout(() => banner.classList.add('hidden'), 5000);
+}
+
+function formatoFechaHora(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('es-CL', { day: '2-digit', month: 'short' }) + ' ' +
+         d.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+}
+
+// El rango se calcula acá (cliente) y se manda como desde/hasta en ISO —
+// el backend no conoce "hoy/7d/30d", solo fechas.
+function calcularRango(rango) {
+  const hasta = new Date();
+  let desde;
+  if (rango === 'hoy') {
+    desde = new Date(hasta.getFullYear(), hasta.getMonth(), hasta.getDate());
+  } else if (rango === '7d') {
+    desde = new Date(hasta.getTime() - 7 * 24 * 60 * 60 * 1000);
+  } else {
+    desde = new Date(hasta.getTime() - 30 * 24 * 60 * 60 * 1000);
+  }
+  return { desde: desde.toISOString(), hasta: hasta.toISOString() };
+}
+
+function cambiarRango(rango) {
+  rangoActual = rango;
+  document.querySelectorAll('.rango-tab').forEach((b) => b.classList.toggle('activo', b.dataset.rango === rango));
+  cargar();
+}
+
+async function cargar() {
+  try {
+    const { desde, hasta } = calcularRango(rangoActual);
+    const data = await apiFetch(`/api/admin/actividad?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`);
+    render(data);
+    document.getElementById('estadoCarga').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+  } catch (e) {
+    document.getElementById('estadoCarga').textContent = 'Error al cargar: ' + e.message;
+  }
+}
+
+function render(data) {
+  const t = data.totales || {};
+  document.getElementById('valVistas').textContent = t.vista_producto || 0;
+  document.getElementById('valCheckouts').textContent = t.inicio_checkout || 0;
+  document.getElementById('valCompras').textContent = t.compra_completada || 0;
+  document.getElementById('valAbandono').textContent =
+    data.tasa_abandono === null || data.tasa_abandono === undefined
+      ? '—'
+      : Math.round(data.tasa_abandono * 100) + '%';
+
+  const productos = data.productos_mas_vistos || [];
+  document.getElementById('tablaProductos').innerHTML = productos.map((p) => `
+    <tr><td>${p.producto_nombre}</td><td class="num">${p.vistas}</td></tr>
+  `).join('');
+  document.getElementById('vacioProductos').classList.toggle('hidden', productos.length > 0);
+
+  const abandonados = data.carritos_abandonados || [];
+  document.getElementById('tablaAbandonados').innerHTML = abandonados.map((c) => `
+    <tr>
+      <td>${c.producto_nombre || '—'}</td>
+      <td>${c.organizacion_nombre ? `<span class="org-chip">${c.organizacion_nombre}</span>` : '<span class="sin-org">Venta directa</span>'}</td>
+      <td>${formatoFechaHora(c.iniciado_en)}</td>
+    </tr>
+  `).join('');
+  document.getElementById('vacioAbandonados').classList.toggle('hidden', abandonados.length > 0);
+}
+
+document.querySelector('.rango-tab[data-rango="30d"]').classList.add('activo');
+cargar();
+</script>
+
+</body>
+</html>

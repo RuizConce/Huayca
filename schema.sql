@@ -258,10 +258,32 @@ CREATE TABLE contenido_sitio (
 );
 
 -- -------------------------------------------------
+-- EVENTOS DE ACTIVIDAD (embudo de conversión)
+-- Trackea el recorrido de una visita (sin cuentas de usuario) vía
+-- session_id generado en el navegador y guardado en sessionStorage. Es
+-- tracking puro: no bloquea ni condiciona el flujo de compra si falla
+-- (ver POST /api/eventos, público y sin auth a propósito).
+-- -------------------------------------------------
+CREATE TABLE eventos_actividad (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tipo ENUM('vista_producto','agregar_carrito','inicio_checkout','compra_completada') NOT NULL,
+  producto_id INT NULL,
+  organizacion_id INT NULL,
+  session_id VARCHAR(64) NOT NULL,
+  pedido_id INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (producto_id) REFERENCES productos(id),
+  FOREIGN KEY (organizacion_id) REFERENCES organizaciones(id),
+  FOREIGN KEY (pedido_id) REFERENCES pedidos(id)
+);
+
+-- -------------------------------------------------
 -- Índices de apoyo para las consultas más frecuentes
 -- -------------------------------------------------
 CREATE INDEX idx_pedidos_organizacion ON pedidos(organizacion_id);
 CREATE INDEX idx_pedidos_estado_pago ON pedidos(estado_pago);
 CREATE INDEX idx_comisiones_organizacion ON comisiones(organizacion_id);
 CREATE INDEX idx_comisiones_estado ON comisiones(estado);
+CREATE INDEX idx_eventos_session ON eventos_actividad(session_id);
+CREATE INDEX idx_eventos_tipo_fecha ON eventos_actividad(tipo, created_at);
 CREATE INDEX idx_productos_estado ON productos(estado);
