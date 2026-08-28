@@ -138,4 +138,36 @@ async function rechazarPagoPedido({ id, codigo, referencia_externa, metodo_pago,
   }
 }
 
-module.exports = { aprobarPagoPedido, rechazarPagoPedido };
+// Interpreta un objeto "payment" tal como lo devuelve la API de Mercado
+// Pago (via Payment.get() o Payment.search(), da igual la fuente) y aplica
+// la acción que corresponda sobre el pedido asociado por
+// external_reference. La comparten POST /api/pagos/webhook y POST
+// /api/admin/pedidos/:id/sincronizar-pago (el "plan B" manual) para no
+// duplicar esta interpretación en dos lugares que podrían divergir — el
+// bug de HUY-000006 (pago aprobado en Mercado Pago que nunca actualizó el
+// pedido) fue justamente el webhook fallando en silencio antes de llegar
+// a este punto, no un problema de esta lógica en sí.
+async function procesarPagoInfo(info) {
+  const codigo = info.external_reference;
+  if (!codigo) return { ok: false, motivo: 'sin_external_reference' };
+
+  const datosComunes = {
+    codigo,
+    referencia_externa: String(info.id),
+    metodo_pago: info.payment_method_id,
+    payload_respuesta: info,
+    monto: info.transaction_amount
+  };
+
+  if (info.status === 'approved') {
+    return aprobarPagoPedido(datosComunes);
+  }
+  if (['rejected', 'cancelled'].includes(info.status)) {
+    return rechazarPagoPedido({ ...datosComunes, motivo_estado: 'rechazado' });
+  }
+  // 'pending' / 'in_process' / cualquier otro: todavía no hay nada que
+  // cambiar, se espera la próxima notificación (o la próxima sincronización manual).
+  return { ok: true, sin_cambios: true, estado_mercadopago: info.status };
+}
+
+module.exports = { aprobarPagoPedido, rechazarPagoPedido, procesarPagoInfo };

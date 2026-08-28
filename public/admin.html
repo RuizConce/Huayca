@@ -74,6 +74,7 @@
 <header>
   <h1>🤝 Huayca — Admin</h1>
   <div style="display:flex; align-items:center; gap:10px;">
+    <a id="linkSincronizarPago" href="admin-sincronizar-pago.html" class="hidden" style="color:#ffffffcc; font-size:13px;">🔄 Sincronizar pago</a>
     <a id="linkActividad" href="admin-actividad.html" class="hidden" style="color:#ffffffcc; font-size:13px;">📊 Actividad</a>
     <a id="linkLogistica" href="admin-logistica.html" class="hidden" style="color:#ffffffcc; font-size:13px;">🚚 Logística</a>
     <a id="linkOrganizaciones" href="admin-organizaciones.html" class="hidden" style="color:#ffffffcc; font-size:13px;">🤝 Organizaciones</a>
@@ -231,6 +232,7 @@ function logout() {
   document.getElementById('linkOrganizaciones').classList.add('hidden');
   document.getElementById('linkLogistica').classList.add('hidden');
   document.getElementById('linkActividad').classList.add('hidden');
+  document.getElementById('linkSincronizarPago').classList.add('hidden');
   document.getElementById('loginBox').classList.remove('hidden');
 }
 
@@ -242,6 +244,7 @@ function mostrarApp() {
   document.getElementById('linkOrganizaciones').classList.remove('hidden');
   document.getElementById('linkLogistica').classList.remove('hidden');
   document.getElementById('linkActividad').classList.remove('hidden');
+  document.getElementById('linkSincronizarPago').classList.remove('hidden');
   cargarMarcas();
 }
 

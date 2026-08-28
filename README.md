@@ -25,6 +25,7 @@ public/admin-contenido.html     → panel de contenido del sitio (CMS liviano), 
 public/admin-organizaciones.html → aprobar/rechazar/suspender/reactivar organizaciones, enlazado desde admin.html
 public/admin-logistica.html     → pedidos aprobados pendientes de despacho, agrupados por proveedor
 public/admin-actividad.html     → dashboard del embudo de conversión (eventos_actividad)
+public/admin-sincronizar-pago.html → plan B manual: consulta y sincroniza un pago contra Mercado Pago
 public/index.html, catalogo.html, producto.html, checkout.html, pago-resultado.html,
 public/organizaciones.html, organizacion-registro/login/dashboard.html
                                  → frontend público (HTML/JS puro, sin build), servido como estático
@@ -97,7 +98,7 @@ Flujo de un pedido:
 
 1. `POST /api/pedidos` — reserva stock y congela los montos del producto en el pedido. Si viene `organizacion_slug` de un link válido y aprobado, el pedido queda atribuido a esa organización (la atribución no expira: se resuelve en cada compra a partir del link usado, no de una cookie con vencimiento).
 2. `POST /api/pagos/preferencia` — crea la preferencia en Mercado Pago para ese pedido.
-3. Mercado Pago notifica a `POST /api/pagos/webhook` (o el admin confirma manualmente con `PATCH /api/admin/pedidos/:id/marcar-pagado`, útil mientras no haya credenciales de Mercado Pago o para pruebas). Recién ahí:
+3. Mercado Pago notifica a `POST /api/pagos/webhook` (o el admin confirma manualmente con `PATCH /api/admin/pedidos/:id/marcar-pagado`, útil mientras no haya credenciales de Mercado Pago o para pruebas). El webhook entiende tanto el formato moderno (`?type=payment&data.id=`) como el IPN clásico (`?topic=payment&id=` o `?topic=merchant_order&id=`) — un pago aprobado en Mercado Pago que nunca actualizó el pedido en Huayca (bug de HUY-000006) resultó ser justo una notificación en el formato viejo que el webhook no reconocía y descartaba en silencio (devolvía 200 igual, así que ni figuraba como error). Como plan B para cuando el webhook falle o tarde, `POST /api/admin/pedidos/:id/sincronizar-pago` (con UI en `admin-sincronizar-pago.html`, `:id` acepta el código del pedido o el id numérico) consulta el pago real contra Mercado Pago — por `payment_id`/`collection_id` si se lo pasás, o por `external_reference` si no — y aplica exactamente la misma lógica que el webhook (`procesarPagoInfo` en `pagos.service.js`, compartida entre los dos). Recién con el webhook (o la sincronización manual):
    - `pedidos.estado_pago` pasa a `aprobado`.
    - Se **activan** las comisiones: se insertan las filas en `comisiones` (proveedor / huayca / afiliado).
      - Si hubo organización → su comisión se registra a nombre de esa organización.
@@ -141,7 +142,7 @@ Todo bajo `/api/admin` requiere `POST /api/admin/login` primero (tabla `administ
 - Proveedores: `GET/POST /proveedores`, `PUT/DELETE /proveedores/:id` (delete = baja lógica a `inactivo`).
 - Categorías: `GET/POST /categorias`.
 - Productos: `GET/POST /productos`, `PUT/DELETE /productos/:id` (delete = baja lógica a `pausado`). Acá se fijan `precio_proveedor`, `comision_afiliado` y `comision_huayca`.
-- Pedidos (operación): `GET /pedidos`, `PATCH /pedidos/:id/marcar-pagado`, `PATCH /pedidos/:id/despacho`.
+- Pedidos (operación): `GET /pedidos`, `PATCH /pedidos/:id/marcar-pagado`, `PATCH /pedidos/:id/despacho`, `POST /pedidos/:id/sincronizar-pago` (plan B manual, ver arriba).
 - Actividad: `GET /actividad?desde=&hasta=` (ver sección de arriba).
 
 ## Variables de entorno

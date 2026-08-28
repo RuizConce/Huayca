@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { Preference, Payment } = require('mercadopago');
+const { Preference, Payment, MerchantOrder } = require('mercadopago');
 const db = require('../config/db');
 const mpClient = require('../config/mercadopago');
-const { aprobarPagoPedido, rechazarPagoPedido } = require('../services/pagos.service');
+const { procesarPagoInfo } = require('../services/pagos.service');
 
 // Mercado Pago siempre devuelve ambos campos al crear una preferencia
 // (init_point e sandbox_init_point), sin importar qué token se haya usado
@@ -104,46 +104,65 @@ router.post('/preferencia', async (req, res) => {
 
 // POST /api/pagos/webhook
 //
-// Mercado Pago notifica acá cada cambio de estado de un pago, típicamente
-// como POST con query params (?type=payment&data.id=XXXX) o con el mismo
-// dato en el body, según la integración. Consultamos el pago real a la API
-// de Mercado Pago (nunca confiamos en el body de la notificación a secas)
-// y usamos `external_reference` (el código del pedido) para ubicarlo.
+// Mercado Pago tiene DOS formatos de notificación que pueden llegar acá
+// según cómo esté configurada la aplicación del lado de Mercado Pago (el
+// "Webhooks v2" moderno y el IPN clásico, más viejo pero que Mercado Pago
+// sigue mandando en algunos casos/cuentas):
+//   - Webhooks v2:  ?type=payment&data.id=XXXX        (o topic=payment en body.type)
+//   - IPN clásico:  ?topic=payment&id=XXXX
+//   - Cualquiera de los dos, pero con topic=merchant_order en vez de
+//     payment — común en compras vía Checkout Pro.
+// BUG CORREGIDO (HUY-000006, 28/ago): esta ruta solo entendía el primer
+// formato (type/data.id). Una notificación en cualquiera de los otros dos
+// formatos no coincidía con ese chequeo y caía derecho al primer
+// `return res.sendStatus(200)` — Mercado Pago la daba por entregada
+// (200 = éxito) y nunca la reintentaba, así que el pago quedaba aprobado
+// del lado de Mercado Pago sin que Huayca se enterara nunca, SIN ningún
+// error en los logs (porque técnicamente no fallaba nada: simplemente no
+// hacía nada). Ahora se entienden los 3 formatos.
+//
+// En todos los casos se vuelve a consultar el recurso real a la API de
+// Mercado Pago (nunca se confía en el body/query de la notificación a
+// secas) — eso ya estaba bien y no cambió.
 router.post('/webhook', async (req, res) => {
   try {
-    const tipo = req.query.type || req.body?.type;
-    const paymentId = req.query['data.id'] || req.body?.data?.id || req.body?.id;
+    const tipo = req.query.type || req.body?.type || req.query.topic || req.body?.topic;
+    const recursoId = req.query['data.id'] || req.body?.data?.id || req.query.id || req.body?.id;
 
-    if (tipo !== 'payment' || !paymentId) {
-      // Ignoramos otros tipos de notificación (ej. merchant_order)
-      return res.sendStatus(200);
-    }
+    if (!tipo || !recursoId) return res.sendStatus(200);
     if (!mpClient) {
       console.warn('Webhook de Mercado Pago recibido pero MP_ACCESS_TOKEN no está configurado');
       return res.sendStatus(200);
     }
 
-    const payment = new Payment(mpClient);
-    const info = await payment.get({ id: paymentId });
-
-    const codigo = info.external_reference;
-    if (!codigo) return res.sendStatus(200);
-
-    const datosComunes = {
-      codigo,
-      referencia_externa: String(info.id),
-      metodo_pago: info.payment_method_id,
-      payload_respuesta: info,
-      monto: info.transaction_amount
-    };
-
-    if (info.status === 'approved') {
-      await aprobarPagoPedido(datosComunes);
-    } else if (['rejected', 'cancelled'].includes(info.status)) {
-      await rechazarPagoPedido({ ...datosComunes, motivo_estado: 'rechazado' });
+    if (tipo === 'payment') {
+      const payment = new Payment(mpClient);
+      const info = await payment.get({ id: recursoId });
+      await procesarPagoInfo(info);
+      return res.sendStatus(200);
     }
-    // status 'pending' / 'in_process' -> no hacemos nada, esperamos la próxima notificación
 
+    if (tipo === 'merchant_order') {
+      // Una merchant order agrupa los intentos de pago de una compra vía
+      // Checkout Pro; puede traer 0, 1 o más pagos (reintentos incluidos).
+      // Se procesan todos los que ya tengan un estado definitivo —
+      // procesarPagoInfo es idempotente (aprobarPagoPedido/
+      // rechazarPagoPedido no vuelven a aplicar nada si el pedido ya
+      // estaba en ese estado), así que no hay riesgo de duplicar nada
+      // aunque el mismo pago venga referenciado más de una vez.
+      const merchantOrder = new MerchantOrder(mpClient);
+      const orden = await merchantOrder.get({ merchantOrderId: recursoId });
+      const payment = new Payment(mpClient);
+      for (const resumenPago of orden.payments || []) {
+        if (resumenPago.status === 'approved' || ['rejected', 'cancelled'].includes(resumenPago.status)) {
+          const info = await payment.get({ id: resumenPago.id });
+          await procesarPagoInfo(info);
+        }
+      }
+      return res.sendStatus(200);
+    }
+
+    // Otro tipo de notificación que no manejamos (ej. algo nuevo de Mercado Pago).
     res.sendStatus(200);
   } catch (err) {
     console.error('Error procesando webhook de Mercado Pago:', err);

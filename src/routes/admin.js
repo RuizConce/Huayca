@@ -5,7 +5,9 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const db = require('../config/db');
 const { requireAuth } = require('../middleware/auth');
-const { aprobarPagoPedido } = require('../services/pagos.service');
+const { aprobarPagoPedido, procesarPagoInfo } = require('../services/pagos.service');
+const { Payment } = require('mercadopago');
+const mpClient = require('../config/mercadopago');
 
 // Railway no tiene disco persistente entre deploys, así que no guardamos
 // archivos en el filesystem: se reciben en memoria y se convierten a
@@ -467,6 +469,99 @@ router.patch('/pedidos/:id/despacho', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error al actualizar despacho' });
+  }
+});
+
+// POST /api/admin/pedidos/:id/sincronizar-pago
+// Body opcional: { payment_id } (a.k.a. "collection_id", el nombre que
+// usa Mercado Pago en la URL de vuelta al comprador — mismo id, dos
+// nombres).
+//
+// Plan B mientras se confirma que el webhook está bien configurado del
+// lado de Mercado Pago (ver el bug de HUY-000006): consulta el estado
+// REAL de un pago directo contra la API de Mercado Pago y sincroniza el
+// pedido si corresponde, sin depender de que la notificación haya
+// llegado. Usa exactamente la misma lógica que el webhook
+// (procesarPagoInfo), así que el resultado es idéntico al que hubiera
+// dejado una notificación que sí hubiera llegado y funcionado.
+//
+// :id acepta tanto el id numérico de la base como el código del pedido
+// (HUY-000006) — así Cristian no necesita ir a buscar el id interno
+// primero, alcanza con el código que ya tiene a mano.
+router.post('/pedidos/:id/sincronizar-pago', async (req, res) => {
+  try {
+    if (!mpClient) {
+      return res.status(503).json({ error: 'Mercado Pago no está configurado (falta MP_ACCESS_TOKEN)' });
+    }
+
+    const idParam = req.params.id;
+    const esNumerico = /^\d+$/.test(idParam);
+    const [rows] = await db.query(
+      `SELECT * FROM pedidos WHERE ${esNumerico ? 'id' : 'codigo'} = ?`,
+      [idParam]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Pedido no encontrado' });
+    const pedido = rows[0];
+
+    const payment = new Payment(mpClient);
+    const paymentIdBuscado = req.body?.payment_id || req.body?.collection_id;
+    let info;
+
+    if (paymentIdBuscado) {
+      info = await payment.get({ id: paymentIdBuscado });
+    } else {
+      // Sin un payment_id puntual: se busca por external_reference, que
+      // es el código del pedido (así se configuró al crear la
+      // preferencia en POST /api/pagos/preferencia).
+      const resultadoBusqueda = await payment.search({ options: { external_reference: pedido.codigo } });
+      const pagos = resultadoBusqueda.results || [];
+      if (!pagos.length) {
+        return res.json({
+          ok: true,
+          cambio: false,
+          mensaje: 'Mercado Pago no tiene ningún pago registrado para este pedido todavía.'
+        });
+      }
+      // Si hubo más de un intento (ej. un rechazo y después un pago
+      // aprobado), se prioriza el aprobado; si ninguno lo está, el más
+      // reciente. El resultado de /search es un resumen — se vuelve a
+      // pedir el detalle completo por id antes de procesarlo.
+      const aprobado = pagos.find((p) => p.status === 'approved');
+      const elegido = aprobado || [...pagos].sort((a, b) => new Date(b.date_created) - new Date(a.date_created))[0];
+      info = await payment.get({ id: elegido.id });
+    }
+
+    if (info.external_reference && info.external_reference !== pedido.codigo) {
+      return res.status(409).json({
+        error: `El pago ${info.id} pertenece a otro pedido (external_reference=${info.external_reference}), no a ${pedido.codigo}`
+      });
+    }
+
+    const resultado = await procesarPagoInfo(info);
+
+    let mensaje;
+    if (!resultado.ok) {
+      mensaje = 'No se pudo procesar el pago (sin external_reference válido).';
+    } else if (resultado.sin_cambios) {
+      mensaje = `Mercado Pago todavía tiene este pago en estado "${resultado.estado_mercadopago}" — nada que sincronizar por ahora.`;
+    } else if (resultado.ya_procesado || resultado.ignorado) {
+      mensaje = 'El pedido ya estaba al día; no había nada que sincronizar.';
+    } else {
+      mensaje = info.status === 'approved'
+        ? '¡Sincronizado! El pago estaba aprobado en Mercado Pago pero Huayca no lo tenía registrado — el pedido quedó aprobado y la comisión activada.'
+        : 'El pedido se marcó como rechazado (stock devuelto), reflejando el estado real en Mercado Pago.';
+    }
+
+    res.json({
+      ok: true,
+      cambio: !!(resultado.ok && !resultado.sin_cambios && !resultado.ya_procesado && !resultado.ignorado),
+      estado_mercadopago: info.status,
+      payment_id: info.id,
+      mensaje
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al sincronizar el pago con Mercado Pago' });
   }
 });
 

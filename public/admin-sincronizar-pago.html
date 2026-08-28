@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Huayca — Sincronizar pago</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, 'Segoe UI', sans-serif; margin: 0; background: #f4f5f2; color: #1a1a1a; }
+  header { background: #0d2b4e; color: white; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  header h1 { font-size: 18px; margin: 0; }
+  header a.volver { color: #ffffffcc; font-size: 13px; }
+  header button { background: transparent; border: 1px solid #ffffff55; color: white; padding: 6px 12px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+  main { max-width: 560px; margin: 0 auto; padding: 20px; }
+  .hidden { display: none !important; }
+
+  .seccion-card { background: white; border-radius: 12px; padding: 22px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+  .seccion-card h2 { margin: 0 0 4px; color: #0d2b4e; font-size: 17px; }
+  .seccion-card .desc { color: #888; font-size: 13px; margin: 0 0 18px; line-height: 1.5; }
+  label { display: block; font-size: 13px; color: #555; margin-top: 14px; margin-bottom: 5px; }
+  input { width: 100%; padding: 10px 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
+  .ayuda { font-size: 12px; color: #999; margin-top: 4px; }
+  .btn-sincronizar { width: 100%; background: #e8801e; color: white; border: none; padding: 12px; border-radius: 6px; font-size: 14.5px; font-weight: 700; cursor: pointer; margin-top: 20px; }
+  .btn-sincronizar:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  .resultado { margin-top: 18px; padding: 14px 16px; border-radius: 8px; font-size: 13.5px; line-height: 1.5; }
+  .resultado.ok { background: #e7f5ec; color: #145c37; }
+  .resultado.sin-cambio { background: #eef1f6; color: #445; }
+  .resultado.error { background: #fdeeee; color: #c0392b; }
+  .resultado b { display: block; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <a href="admin.html" class="volver">← Volver al panel</a>
+    <h1 style="margin-top:4px;">🔄 Sincronizar pago</h1>
+  </div>
+  <button onclick="cerrarSesion()">Cerrar sesión</button>
+</header>
+
+<main>
+  <div class="seccion-card">
+    <h2>Consultar y sincronizar contra Mercado Pago</h2>
+    <p class="desc">
+      Plan B para cuando el webhook de Mercado Pago no actualizó un pedido a
+      tiempo (o falló): esto consulta el estado <b>real</b> del pago
+      directo contra la API de Mercado Pago y actualiza el pedido si
+      corresponde — exactamente lo mismo que hubiera hecho una notificación
+      que sí hubiera llegado y funcionado.
+    </p>
+
+    <form id="formSync">
+      <label>Código de pedido</label>
+      <input id="codigoPedido" placeholder="Ej: HUY-000006" required>
+      <small class="ayuda">También acepta el id numérico interno del pedido.</small>
+
+      <label>Payment ID / collection ID (opcional)</label>
+      <input id="paymentId" placeholder="Ej: 176091845514">
+      <small class="ayuda">Si lo dejás vacío, se busca automáticamente el pago asociado a este pedido en Mercado Pago (por external_reference). Si tenés el collection_id de la URL de vuelta del comprador, ponerlo acá apunta directo a ese pago puntual.</small>
+
+      <button type="submit" class="btn-sincronizar" id="btnSync">Sincronizar con Mercado Pago</button>
+    </form>
+
+    <div id="resultado" class="hidden"></div>
+  </div>
+</main>
+
+<script>
+const BASE_URL = window.location.origin;
+const token = localStorage.getItem('huayca_admin_token') || '';
+if (!token) window.location.href = 'admin.html';
+
+function cerrarSesion() {
+  localStorage.removeItem('huayca_admin_token');
+  window.location.href = 'admin.html';
+}
+
+function mostrarResultado(clase, html) {
+  const el = document.getElementById('resultado');
+  el.className = 'resultado ' + clase;
+  el.innerHTML = html;
+  el.classList.remove('hidden');
+}
+
+document.getElementById('formSync').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('btnSync');
+  const codigo = document.getElementById('codigoPedido').value.trim();
+  const paymentId = document.getElementById('paymentId').value.trim();
+  if (!codigo) return;
+
+  btn.disabled = true;
+  btn.textContent = 'Consultando Mercado Pago…';
+  document.getElementById('resultado').classList.add('hidden');
+
+  try {
+    const res = await fetch(`${BASE_URL}/api/admin/pedidos/${encodeURIComponent(codigo)}/sincronizar-pago`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify(paymentId ? { payment_id: paymentId } : {})
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
+
+    const clase = data.cambio ? 'ok' : 'sin-cambio';
+    mostrarResultado(clase, `
+      <b>${data.cambio ? '✓ Sincronizado' : 'Sin cambios'}</b>
+      ${data.mensaje}
+      ${data.estado_mercadopago ? `<br><br>Estado en Mercado Pago: <b>${data.estado_mercadopago}</b>${data.payment_id ? ` (payment_id ${data.payment_id})` : ''}` : ''}
+    `);
+  } catch (err) {
+    mostrarResultado('error', `<b>Error</b>${err.message}`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Sincronizar con Mercado Pago';
+  }
+});
+</script>
+
+</body>
+</html>
