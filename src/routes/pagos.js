@@ -124,6 +124,21 @@ router.post('/preferencia', async (req, res) => {
 // En todos los casos se vuelve a consultar el recurso real a la API de
 // Mercado Pago (nunca se confía en el body/query de la notificación a
 // secas) — eso ya estaba bien y no cambió.
+//
+// FIX (reportado al usar "Simular notificaciones" con un payment_id que
+// no existe): un webhook SIEMPRE tiene que responder 200 rápido, incluso
+// cuando no pudo procesar algo — devolver 500 hace que Mercado Pago
+// interprete que la ENTREGA falló y reintente indefinidamente, y puede
+// terminar marcando la integración como poco confiable. La distinción que
+// importa no es "hubo un error sí/no", sino DE QUIÉN es el error:
+//   - Si el problema es al CONSULTAR el recurso en Mercado Pago (404
+//     porque el id no existe, timeout, cualquier error de esa llamada):
+//     no hay nada útil que un reintento logre — se loguea y se responde
+//     200 igual. Si hiciera falta reprocesar ese pago más adelante, está
+//     POST /api/admin/pedidos/:id/sincronizar-pago para eso.
+//   - Si el problema es NUESTRO al guardar el resultado (ej. la base de
+//     datos no responde durante procesarPagoInfo) — ahí sí vale un 500,
+//     porque un reintento de Mercado Pago más tarde puede sí resolverlo.
 router.post('/webhook', async (req, res) => {
   try {
     const tipo = req.query.type || req.body?.type || req.query.topic || req.body?.topic;
@@ -137,7 +152,15 @@ router.post('/webhook', async (req, res) => {
 
     if (tipo === 'payment') {
       const payment = new Payment(mpClient);
-      const info = await payment.get({ id: recursoId });
+      let info;
+      try {
+        info = await payment.get({ id: recursoId });
+      } catch (errConsulta) {
+        console.error(`Webhook de Mercado Pago: no se pudo consultar el pago ${recursoId} (puede no existir, ej. una notificación de prueba) —`, errConsulta.message || errConsulta);
+        return res.sendStatus(200);
+      }
+      // A partir de acá cualquier error (ej. de base de datos) lo agarra
+      // el catch de afuera y responde 500 — es un problema nuestro real.
       await procesarPagoInfo(info);
       return res.sendStatus(200);
     }
@@ -151,11 +174,25 @@ router.post('/webhook', async (req, res) => {
       // estaba en ese estado), así que no hay riesgo de duplicar nada
       // aunque el mismo pago venga referenciado más de una vez.
       const merchantOrder = new MerchantOrder(mpClient);
-      const orden = await merchantOrder.get({ merchantOrderId: recursoId });
+      let orden;
+      try {
+        orden = await merchantOrder.get({ merchantOrderId: recursoId });
+      } catch (errConsulta) {
+        console.error(`Webhook de Mercado Pago: no se pudo consultar la merchant order ${recursoId} —`, errConsulta.message || errConsulta);
+        return res.sendStatus(200);
+      }
       const payment = new Payment(mpClient);
       for (const resumenPago of orden.payments || []) {
         if (resumenPago.status === 'approved' || ['rejected', 'cancelled'].includes(resumenPago.status)) {
-          const info = await payment.get({ id: resumenPago.id });
+          let info;
+          try {
+            info = await payment.get({ id: resumenPago.id });
+          } catch (errConsulta) {
+            // Un pago puntual de la orden no se pudo consultar: se loguea
+            // y se sigue con los demás en vez de cortar todo acá.
+            console.error(`Webhook de Mercado Pago: no se pudo consultar el pago ${resumenPago.id} (de la merchant order ${recursoId}) —`, errConsulta.message || errConsulta);
+            continue;
+          }
           await procesarPagoInfo(info);
         }
       }
@@ -165,8 +202,10 @@ router.post('/webhook', async (req, res) => {
     // Otro tipo de notificación que no manejamos (ej. algo nuevo de Mercado Pago).
     res.sendStatus(200);
   } catch (err) {
-    console.error('Error procesando webhook de Mercado Pago:', err);
-    // Respondemos 500 para que Mercado Pago reintente la notificación más tarde.
+    // Solo debería llegar acá algo verdaderamente inesperado de nuestro
+    // lado (ej. la base de datos no responde) — recién ahí vale la pena
+    // que Mercado Pago reintente la notificación más tarde.
+    console.error('Error inesperado procesando webhook de Mercado Pago:', err);
     res.sendStatus(500);
   }
 });
