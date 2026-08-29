@@ -9,6 +9,8 @@ schema.sql                     → tablas completas de MySQL, ejecutar primero (
 server.js                      → punto de entrada Express
 src/config/db.js               → pool de conexión MySQL (usa vars de Railway)
 src/config/mercadopago.js      → cliente de Mercado Pago (null si falta MP_ACCESS_TOKEN)
+src/config/resend.js           → cliente de Resend, correos transaccionales (null si falta RESEND_API_KEY)
+src/services/notificaciones.service.js → los 3 correos de "pedido aprobado" (admin/proveedor/organización)
 src/middleware/auth.js         → JWT para organizaciones/admin
 src/services/pagos.service.js  → aprobar/rechazar pago de un pedido (activa comisiones, devuelve stock)
 src/routes/productos.js        → catálogo público + categorías
@@ -107,6 +109,20 @@ Flujo de un pedido:
 4. Si el pago es rechazado/cancelado, el stock reservado se devuelve automáticamente y no se genera ninguna comisión.
 
 Los montos se **congelan** en el pedido al momento de la compra (no se recalculan si el producto cambia de precio después).
+
+## Correos automáticos al aprobarse un pedido
+
+`estado_pago` puede pasar a `aprobado` por 3 caminos distintos (webhook, `sincronizar-pago`, `marcar-pagado`), pero los 3 convergen en una sola función, `aprobarPagoPedido()` (`src/services/pagos.service.js`) — ahí, y solo ahí, se dispara (sin `await`, fire-and-forget de verdad) `notificarPedidoAprobado(pedidoId)` (`src/services/notificaciones.service.js`). No hizo falta agregar la llamada en los 3 endpoints por separado: ya estaban todos pasando por ese mismo lugar.
+
+Tres correos por Resend, cada uno independiente (si uno falla no frena a los otros — `Promise.allSettled`, no `Promise.all`):
+
+1. **Admin** (`ADMIN_NOTIFICATION_EMAIL`) — aviso interno: código, producto, monto, organización o "venta directa", cliente.
+2. **Proveedor** (`proveedores.email_contacto`) — "se vendió tu producto", con un botón `wa.me/{teléfono}` pre-armado si el cliente dejó teléfono (si no, se muestra su email como contacto alternativo), más la dirección de envío.
+3. **Organización** (`organizaciones.email`) — solo si el pedido tiene `organizacion_id` (venta directa = no se manda). Mensaje sin montos ("se generó una nueva comisión"), con botón a `organizacion-dashboard.html`.
+
+Anti-duplicados: `notificarPedidoAprobado()` reclama el pedido con un `UPDATE pedidos SET notificaciones_enviadas_at = NOW() WHERE id = ? AND notificaciones_enviadas_at IS NULL` antes de mandar nada — si dos llamadas caen sobre el mismo pedido (o se llama la función a mano dos veces), solo la primera manda los 3 correos.
+
+Sin `RESEND_API_KEY` configurada (o si a un proveedor/organización le falta el email), el envío correspondiente se loguea con `console.error` y ahí queda — nunca bloquea ni afecta la confirmación del pago al comprador.
 
 ## Liquidaciones
 

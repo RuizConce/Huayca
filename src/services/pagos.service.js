@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const { notificarPedidoAprobado } = require('./notificaciones.service');
 
 // Busca el pedido por id o por código y lo bloquea (FOR UPDATE) dentro de
 // una transacción ya abierta, para evitar condiciones de carrera si llegan
@@ -79,6 +80,22 @@ async function aprobarPagoPedido({ id, codigo, referencia_externa, metodo_pago, 
     }
 
     await conn.commit();
+
+    // Fire and forget de verdad: NO se espera (sin await) porque esta
+    // función la llaman, y esperan una respuesta rápida de, el webhook de
+    // Mercado Pago (que tiene su propio timeout) y los endpoints de admin
+    // (sincronizar-pago, marcar-pagado) — mandar 3 correos no puede ser lo
+    // que demore esa respuesta. notificarPedidoAprobado() nunca lanza
+    // (todo queda atrapado y logueado adentro), así que ni hace falta un
+    // .catch() acá, pero se agrega uno igual como redundancia explícita.
+    // Es EL único lugar desde donde se llama: los 3 caminos donde un
+    // pedido puede aprobarse (webhook, sincronizar-pago, marcar-pagado)
+    // ya convergen acá, así que no hace falta triplicar la llamada en
+    // cada endpoint.
+    notificarPedidoAprobado(pedido.id).catch((err) => {
+      console.error(`[notificaciones] Error inesperado disparando las notificaciones del pedido ${pedido.id}:`, err);
+    });
+
     return { ok: true, pedido };
   } catch (err) {
     await conn.rollback();

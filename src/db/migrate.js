@@ -68,7 +68,8 @@ async function ensureIndex(connection, tabla, indice, definicionColumnas) {
 // Cambios de schema posteriores al schema.sql original, aplicados de forma
 // incremental e idempotente (no rompen si ya existen).
 const MIGRACIONES_INCREMENTALES = [
-  { tabla: 'proveedores', columna: 'logo_url', definicion: 'logo_url VARCHAR(500) AFTER datos_bancarios' }
+  { tabla: 'proveedores', columna: 'logo_url', definicion: 'logo_url VARCHAR(500) AFTER datos_bancarios' },
+  { tabla: 'pedidos', columna: 'notificaciones_enviadas_at', definicion: 'notificaciones_enviadas_at TIMESTAMP NULL AFTER direccion_envio' }
 ];
 
 // Las columnas de imagen partieron como VARCHAR(500) (pensadas para URLs) y

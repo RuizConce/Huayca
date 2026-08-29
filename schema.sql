@@ -145,6 +145,11 @@ CREATE TABLE pedidos (
 
   direccion_envio JSON,
 
+  -- Marca cuándo se dispararon los 3 correos de "pedido aprobado" (admin,
+  -- proveedor, organización) — evita reenviarlos si notificarPedidoAprobado()
+  -- se llama más de una vez sobre el mismo pedido (ver src/services/notificaciones.service.js).
+  notificaciones_enviadas_at TIMESTAMP NULL,
+
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
