@@ -1,8 +1,8 @@
 const db = require('../config/db');
 const resendClient = require('../config/resend');
+const APP_BASE_URL = require('../config/appBaseUrl'); // normalizada, sin barra final — ver ese archivo
 
 const FROM = process.env.RESEND_FROM_EMAIL || 'Huayca <onboarding@resend.dev>';
-const APP_BASE_URL = process.env.APP_BASE_URL || '';
 
 function formatoCLP(monto) {
   return '$' + Number(monto || 0).toLocaleString('es-CL');

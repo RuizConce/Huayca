@@ -13,6 +13,7 @@ const ticketsRouter = require('./src/routes/tickets');
 const bootstrapRouter = require('./src/routes/bootstrap');
 const contenidoRouter = require('./src/routes/contenido');
 const eventosRouter = require('./src/routes/eventos');
+const APP_BASE_URL = require('./src/config/appBaseUrl');
 
 const app = express();
 app.use(cors());
@@ -20,6 +21,29 @@ app.use(cors());
 // desde el panel viajan como data: URI en base64 dentro del JSON de
 // contenido_sitio / proveedores / productos (ver POST /api/admin/upload-imagen).
 app.use(express.json({ limit: '8mb' }));
+
+// Colapsa barras repetidas en la ruta ("//api/pagos/webhook" ->
+// "/api/pagos/webhook") ANTES de que Express intente matchear rutas. Esto
+// NO es el fix real del bug de la doble barra (eso es no generar URLs mal
+// formadas desde el origen — ver src/config/appBaseUrl.js, que ya
+// normaliza APP_BASE_URL) — es una red de seguridad aparte, porque
+// cualquier preferencia de Mercado Pago que ya se haya creado ANTES de
+// ese fix quedó con notification_url/back_urls con la doble barra
+// guardados ahí mismo, y Mercado Pago le va a seguir pegando a esa URL
+// exacta indefinidamente (no hay forma de corregir una preferencia ya
+// creada). Con esto, esas notificaciones viejas también van a matchear
+// bien la ruta en vez de perderse en un 404 antes de llegar al handler.
+app.use((req, res, next) => {
+  const signoPregunta = req.url.indexOf('?');
+  const pathname = signoPregunta === -1 ? req.url : req.url.slice(0, signoPregunta);
+  const query = signoPregunta === -1 ? '' : req.url.slice(signoPregunta);
+  const pathnameNormalizado = pathname.replace(/\/{2,}/g, '/');
+  if (pathnameNormalizado !== pathname) {
+    console.log(`[normalizar-ruta] "${pathname}" -> "${pathnameNormalizado}" (doble barra colapsada)`);
+    req.url = pathnameNormalizado + query;
+  }
+  next();
+});
 
 // Panel de administración estático (HTML/JS puro, sin build step):
 // queda disponible en /admin.html, sirviéndose desde el mismo dominio que
@@ -73,7 +97,14 @@ app.listen(PORT, () => {
       ? mpToken.slice(0, 4) + '…(corto)'
       : `${mpToken.slice(0, 12)}…${mpToken.slice(-4)} (${mpToken.length} caracteres, ${mpToken.startsWith('APP_USR-') ? 'producción' : mpToken.startsWith('TEST-') ? 'prueba' : 'prefijo desconocido'})`;
   console.log('[MP config] MP_ACCESS_TOKEN:', tokenEnmascarado);
-  console.log('[MP config] APP_BASE_URL:', process.env.APP_BASE_URL || '(no configurado)');
+  // Se loguean las dos versiones (cruda y normalizada) para que quede
+  // explícito en cada arranque si la variable en Railway tiene barra(s)
+  // final(es) — la normalizada es la que efectivamente usa el código para
+  // armar notification_url/back_urls (ver src/config/appBaseUrl.js), así
+  // que si difieren de la cruda, ya no importa: el código igual arma bien
+  // la URL de cualquier forma en que esté escrita la variable.
+  console.log('[MP config] APP_BASE_URL (tal cual en Railway):', process.env.APP_BASE_URL || '(no configurado)');
+  console.log('[MP config] APP_BASE_URL (normalizada, la que se usa de verdad):', APP_BASE_URL || '(no configurado)');
   console.log('[MP config] MP_NOTIFICATION_URL (override manual, opcional):', process.env.MP_NOTIFICATION_URL || '(no configurado — se arma como {APP_BASE_URL}/api/pagos/webhook)');
 });
 

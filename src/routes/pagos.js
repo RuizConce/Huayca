@@ -3,6 +3,7 @@ const router = express.Router();
 const { Preference, Payment, MerchantOrder } = require('mercadopago');
 const db = require('../config/db');
 const mpClient = require('../config/mercadopago');
+const APP_BASE_URL = require('../config/appBaseUrl');
 const { procesarPagoInfo } = require('../services/pagos.service');
 
 // Mercado Pago siempre devuelve ambos campos al crear una preferencia
@@ -69,7 +70,7 @@ router.post('/preferencia', async (req, res) => {
       return res.status(409).json({ error: `El pedido ya está en estado de pago: ${pedido.estado_pago}` });
     }
 
-    const baseUrl = process.env.APP_BASE_URL;
+    const baseUrl = APP_BASE_URL; // ya normalizada, sin barra final — ver src/config/appBaseUrl.js
     // notification_url SIEMPRE se manda explícito acá adentro del cuerpo
     // de la preferencia — nunca se depende solo de la configuración
     // global de "Webhooks" del panel de la aplicación en Mercado Pago.
