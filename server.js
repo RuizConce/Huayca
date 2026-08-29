@@ -59,6 +59,22 @@ app.use((req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Huayca API corriendo en puerto ${PORT}`);
+  // Diagnóstico de arranque para el problema del webhook de Mercado Pago
+  // que no llega en compras reales: deja registrado, en cada deploy, con
+  // qué configuración de Mercado Pago corre ESTA instancia — así se puede
+  // comparar directamente (sin esperar una compra) contra lo que dice el
+  // panel de Mercado Pago (aplicación, modo test/producción del token) y
+  // detectar un desalinee de token/URL apenas arranca, no recién cuando
+  // falla una notificación real. El token nunca se imprime completo.
+  const mpToken = process.env.MP_ACCESS_TOKEN || '';
+  const tokenEnmascarado = !mpToken
+    ? '(no configurado)'
+    : mpToken.length <= 16
+      ? mpToken.slice(0, 4) + '…(corto)'
+      : `${mpToken.slice(0, 12)}…${mpToken.slice(-4)} (${mpToken.length} caracteres, ${mpToken.startsWith('APP_USR-') ? 'producción' : mpToken.startsWith('TEST-') ? 'prueba' : 'prefijo desconocido'})`;
+  console.log('[MP config] MP_ACCESS_TOKEN:', tokenEnmascarado);
+  console.log('[MP config] APP_BASE_URL:', process.env.APP_BASE_URL || '(no configurado)');
+  console.log('[MP config] MP_NOTIFICATION_URL (override manual, opcional):', process.env.MP_NOTIFICATION_URL || '(no configurado — se arma como {APP_BASE_URL}/api/pagos/webhook)');
 });
 
 // Best-effort: aplica schema.sql al arrancar (sirve para el primer deploy

@@ -26,6 +26,20 @@ function elegirUrlCheckout(resultadoPreferencia) {
     : resultadoPreferencia.sandbox_init_point;
 }
 
+// Para poder comparar en los logs, sin nunca imprimir el token completo:
+// primeros 12 caracteres (alcanza para ver el prefijo APP_USR-/TEST- y
+// los primeros dígitos del ID de la cuenta) + últimos 4. Si en algún
+// momento el token de creación de preferencia y el de procesamiento del
+// webhook no coinciden acá, esa es la pista de un token distinto/de otra
+// aplicación entre un momento y el otro (ej. Railway sirviendo una
+// revisión vieja, o la variable cambiada a mitad de camino).
+function tokenEnmascarado() {
+  const t = process.env.MP_ACCESS_TOKEN || '';
+  if (!t) return '(vacío)';
+  if (t.length <= 16) return t.slice(0, 4) + '…(corto)';
+  return `${t.slice(0, 12)}…${t.slice(-4)} (${t.length} caracteres)`;
+}
+
 // POST /api/pagos/preferencia
 // Body: { pedido_codigo }
 //
@@ -56,6 +70,16 @@ router.post('/preferencia', async (req, res) => {
     }
 
     const baseUrl = process.env.APP_BASE_URL;
+    // notification_url SIEMPRE se manda explícito acá adentro del cuerpo
+    // de la preferencia — nunca se depende solo de la configuración
+    // global de "Webhooks" del panel de la aplicación en Mercado Pago.
+    // Logueado para poder confirmar en cada compra real qué URL exacta
+    // se le mandó a Mercado Pago, y con qué token (enmascarado) — así se
+    // puede cruzar contra el log del webhook cuando (si) llegue la
+    // notificación de esa misma compra.
+    const notificationUrl = process.env.MP_NOTIFICATION_URL || (baseUrl ? `${baseUrl}/api/pagos/webhook` : undefined);
+    console.log(`[MP preferencia] pedido=${pedido.codigo} notification_url=${notificationUrl || '(sin definir — falta APP_BASE_URL y MP_NOTIFICATION_URL)'} token=${tokenEnmascarado()}`);
+
     const preference = new Preference(mpClient);
     const resultado = await preference.create({
       body: {
@@ -66,7 +90,7 @@ router.post('/preferencia', async (req, res) => {
           currency_id: 'CLP'
         }],
         external_reference: pedido.codigo,
-        notification_url: process.env.MP_NOTIFICATION_URL || (baseUrl ? `${baseUrl}/api/pagos/webhook` : undefined),
+        notification_url: notificationUrl,
         // Las 3 rutas de vuelta apuntan al mismo archivo estático
         // (public/pago-resultado.html) con un query param que distingue el
         // caso — la página igual reconsulta GET /api/pedidos/:codigo como
@@ -83,6 +107,11 @@ router.post('/preferencia', async (req, res) => {
         metadata: { pedido_id: pedido.id, pedido_codigo: pedido.codigo }
       }
     });
+
+    // Mercado Pago devuelve de vuelta el notification_url que efectivamente
+    // quedó guardado en la preferencia — se loguea para confirmar que
+    // llegó bien (y no lo pisó ni lo ignoró silenciosamente su lado).
+    console.log(`[MP preferencia] pedido=${pedido.codigo} preference_id=${resultado.id} notification_url confirmado por Mercado Pago=${resultado.notification_url || '(no vino en la respuesta)'}`);
 
     await db.query(
       `INSERT INTO pagos (pedido_id, referencia_externa, monto, estado, payload_respuesta)
@@ -140,11 +169,39 @@ router.post('/preferencia', async (req, res) => {
 //     datos no responde durante procesarPagoInfo) — ahí sí vale un 500,
 //     porque un reintento de Mercado Pago más tarde puede sí resolverlo.
 router.post('/webhook', async (req, res) => {
+  // LOGGING EXPLÍCITO E INCONDICIONAL — se registra CUALQUIER request que
+  // llegue acá, con headers y body completos, ANTES de cualquier
+  // validación o lógica de negocio, sin importar si después el request
+  // resulta válido, reconocido, o ni siquiera tiene el shape esperado.
+  // Es deliberadamente ruidoso: la duda que estamos resolviendo es
+  // "¿Mercado Pago está llamando a este endpoint para compras reales,
+  // sí o no?" — y la única forma de saberlo con certeza es que esto quede
+  // en el log pase lo que pase, incluso si todo lo de abajo explota.
+  // No sacar esto sin avisar mientras se siga diagnosticando.
+  try {
+    console.log('========== WEBHOOK MERCADO PAGO — request entrante ==========');
+    console.log('[MP webhook] timestamp:', new Date().toISOString());
+    console.log('[MP webhook] método + URL:', req.method, req.originalUrl);
+    console.log('[MP webhook] query:', JSON.stringify(req.query));
+    console.log('[MP webhook] headers:', JSON.stringify(req.headers));
+    console.log('[MP webhook] body:', JSON.stringify(req.body));
+    console.log('[MP webhook] token activo:', tokenEnmascarado());
+    console.log('===============================================================');
+  } catch (errLog) {
+    // Ni siquiera el logging mismo debe poder tumbar esto — si por lo que
+    // sea algo no se puede serializar, se deja constancia igual.
+    console.error('[MP webhook] no se pudo loguear el request completo:', errLog);
+  }
+
   try {
     const tipo = req.query.type || req.body?.type || req.query.topic || req.body?.topic;
     const recursoId = req.query['data.id'] || req.body?.data?.id || req.query.id || req.body?.id;
+    console.log(`[MP webhook] parseado -> tipo=${tipo || '(ninguno)'} recursoId=${recursoId || '(ninguno)'}`);
 
-    if (!tipo || !recursoId) return res.sendStatus(200);
+    if (!tipo || !recursoId) {
+      console.log('[MP webhook] sin tipo/recursoId reconocible en este request — se responde 200 sin procesar nada.');
+      return res.sendStatus(200);
+    }
     if (!mpClient) {
       console.warn('Webhook de Mercado Pago recibido pero MP_ACCESS_TOKEN no está configurado');
       return res.sendStatus(200);
