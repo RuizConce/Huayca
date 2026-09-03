@@ -112,41 +112,56 @@ async function cargarDashboard() {
     `;
     }).join('');
 
+    // Dos pestañas, contenido ya armado antes (nada nuevo acá, solo se
+    // reparte en dos bloques en vez de uno solo apilado) — cambiar de
+    // pestaña es puro mostrar/ocultar vía JS (ver mostrarTab), no hay
+    // recarga ni un segundo fetch: los datos de ambas pestañas ya están
+    // acá desde el Promise.all de arriba.
     cont.innerHTML = `
-      <div class="stat-grid">
-        <div class="stat-tile"><span>Saldo disponible</span><b>${Huayca.formatoCLP(data.saldo_disponible)}</b></div>
-        <div class="stat-tile"><span>Total generado</span><b>${Huayca.formatoCLP(data.resumen.total_generado)}</b></div>
-        <div class="stat-tile"><span>Total pagado</span><b>${Huayca.formatoCLP(data.resumen.total_pagado)}</b></div>
-        <div class="stat-tile"><span>Ventas realizadas</span><b>${data.resumen.ventas_realizadas}</b></div>
+      <div class="dash-tabs" id="dashTabs">
+        <button type="button" class="dash-tab" id="tabBtnComisiones" onclick="mostrarTab('comisiones')">Mis comisiones</button>
+        <button type="button" class="dash-tab" id="tabBtnProductos" onclick="mostrarTab('productos')">Productos y mis comisiones</button>
       </div>
 
-      <div class="link-share">
-        <span style="font-size:20px;">🔗</span>
-        <code id="linkCompartir">${link}</code>
-        <button class="btn btn-sm btn-navy" id="btnCopiarLink">Copiar link</button>
+      <div id="panelComisiones">
+        <div class="stat-grid">
+          <div class="stat-tile"><span>Saldo disponible</span><b>${Huayca.formatoCLP(data.saldo_disponible)}</b></div>
+          <div class="stat-tile"><span>Total generado</span><b>${Huayca.formatoCLP(data.resumen.total_generado)}</b></div>
+          <div class="stat-tile"><span>Total pagado</span><b>${Huayca.formatoCLP(data.resumen.total_pagado)}</b></div>
+          <div class="stat-tile"><span>Ventas realizadas</span><b>${data.resumen.ventas_realizadas}</b></div>
+        </div>
+
+        <div class="link-share">
+          <span style="font-size:20px;">🔗</span>
+          <code id="linkCompartir">${link}</code>
+          <button class="btn btn-sm btn-navy" id="btnCopiarLink">Copiar link</button>
+        </div>
+
+        <h3 style="color:var(--navy); font-size:16px; margin-bottom:10px;">Últimas comisiones</h3>
+        ${filas ? `
+          <div style="overflow-x:auto;">
+            <table class="tabla-comisiones">
+              <thead><tr><th>Pedido</th><th>Monto</th><th>Estado</th><th>Fecha</th></tr></thead>
+              <tbody>${filas}</tbody>
+            </table>
+          </div>
+        ` : '<div class="estado-vacio">Todavía no tienes ventas registradas. ¡Comparte tu link!</div>'}
       </div>
 
-      <h3 style="color:var(--navy); font-size:16px; margin-bottom:10px;">Últimas comisiones</h3>
-      ${filas ? `
-        <div style="overflow-x:auto;">
-          <table class="tabla-comisiones">
-            <thead><tr><th>Pedido</th><th>Monto</th><th>Estado</th><th>Fecha</th></tr></thead>
-            <tbody>${filas}</tbody>
-          </table>
-        </div>
-      ` : '<div class="estado-vacio">Todavía no tienes ventas registradas. ¡Comparte tu link!</div>'}
-
-      <h3 style="color:var(--navy); font-size:16px; margin:26px 0 4px;">Productos y tus comisiones</h3>
-      <p style="color:var(--text-soft); font-size:13px; margin:0 0 10px;">Catálogo completo, ordenado por lo que más te conviene promocionar. Por privacidad, acá solo se muestra el precio final y tu comisión — el resto del desglose es interno de Huayca.</p>
-      ${filasCatalogo ? `
-        <div style="overflow-x:auto;">
-          <table class="tabla-comisiones">
-            <thead><tr><th>Producto</th><th>Precio final</th><th>Tu comisión</th><th></th></tr></thead>
-            <tbody>${filasCatalogo}</tbody>
-          </table>
-        </div>
-      ` : '<div class="estado-vacio">Todavía no hay productos activos en el catálogo.</div>'}
+      <div id="panelProductos" class="hidden">
+        <p style="color:var(--text-soft); font-size:13px; margin:0 0 14px;">Catálogo completo, ordenado por lo que más te conviene promocionar. Por privacidad, acá solo se muestra el precio final y tu comisión — el resto del desglose es interno de Huayca.</p>
+        ${filasCatalogo ? `
+          <div style="overflow-x:auto;">
+            <table class="tabla-comisiones">
+              <thead><tr><th>Producto</th><th>Precio final</th><th>Tu comisión</th><th></th></tr></thead>
+              <tbody>${filasCatalogo}</tbody>
+            </table>
+          </div>
+        ` : '<div class="estado-vacio">Todavía no hay productos activos en el catálogo.</div>'}
+      </div>
     `;
+
+    mostrarTab(tabActual);
 
     document.getElementById('btnCopiarLink').addEventListener('click', async () => {
       const btn = document.getElementById('btnCopiarLink');
@@ -179,6 +194,19 @@ async function cargarDashboard() {
     if (err.status === 401 || err.status === 403) { irALogin(); return; }
     cont.innerHTML = '<div class="estado-vacio">No se pudo cargar tu dashboard. Intenta de nuevo más tarde.</div>';
   }
+}
+
+// Cuál pestaña está activa se guarda acá afuera (no en el DOM) para que
+// sobreviva a un cargarDashboard() nuevo — no debería hacer falta en el
+// uso normal (se carga una sola vez), pero así "recordar la pestaña" no
+// depende de en qué momento se llama esta función.
+let tabActual = 'comisiones';
+function mostrarTab(tab) {
+  tabActual = tab;
+  document.getElementById('tabBtnComisiones').classList.toggle('activo', tab === 'comisiones');
+  document.getElementById('tabBtnProductos').classList.toggle('activo', tab === 'productos');
+  document.getElementById('panelComisiones').classList.toggle('hidden', tab !== 'comisiones');
+  document.getElementById('panelProductos').classList.toggle('hidden', tab !== 'productos');
 }
 
 document.getElementById('btnLogout').addEventListener('click', irALogin);
