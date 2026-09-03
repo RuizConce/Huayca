@@ -421,16 +421,22 @@ router.delete('/productos/:id', async (req, res) => {
 // PEDIDOS (vista operativa para el equipo Huayca)
 // -------------------------------------------------
 
-// GET /api/admin/pedidos?estado_pago=&estado_despacho=
+// GET /api/admin/pedidos?estado_pago=&estado_despacho=&desde=&hasta=&proveedor_id=&organizacion_id=&q=
+// desde/hasta, proveedor_id, organizacion_id y q son opcionales — sin ellos
+// se comporta exactamente igual que antes (usado por Logística, que solo
+// filtra por estado_pago/estado_despacho). q busca por código de pedido,
+// nombre o email del cliente (útil para la pestaña "Pedidos" del panel).
 router.get('/pedidos', async (req, res) => {
   try {
-    const { estado_pago, estado_despacho } = req.query;
+    const { estado_pago, estado_despacho, desde, hasta, proveedor_id, organizacion_id, q } = req.query;
     let query = `
-      SELECT p.id, p.codigo, p.monto_total, p.cantidad, p.estado_pago, p.estado_despacho,
-             p.estado_liquidacion, p.direccion_envio, p.created_at,
+      SELECT p.id, p.codigo, p.monto_proveedor, p.monto_comision_afiliado, p.monto_comision_huayca,
+             p.monto_total, p.cantidad, p.estado_pago, p.estado_despacho, p.estado_liquidacion,
+             p.direccion_envio, p.created_at,
              c.nombre AS cliente_nombre, c.email AS cliente_email, c.telefono AS cliente_telefono,
-             pr.nombre AS producto_nombre, prov.id AS proveedor_id, prov.nombre AS proveedor_nombre,
-             o.nombre AS organizacion_nombre, o.slug AS organizacion_slug
+             pr.id AS producto_id, pr.nombre AS producto_nombre,
+             prov.id AS proveedor_id, prov.nombre AS proveedor_nombre,
+             o.id AS organizacion_id, o.nombre AS organizacion_nombre, o.slug AS organizacion_slug
       FROM pedidos p
       JOIN clientes c ON c.id = p.cliente_id
       JOIN productos pr ON pr.id = p.producto_id
@@ -441,7 +447,16 @@ router.get('/pedidos', async (req, res) => {
     const params = [];
     if (estado_pago) { query += ' AND p.estado_pago = ?'; params.push(estado_pago); }
     if (estado_despacho) { query += ' AND p.estado_despacho = ?'; params.push(estado_despacho); }
-    query += ' ORDER BY p.created_at DESC LIMIT 200';
+    if (desde) { query += ' AND p.created_at >= ?'; params.push(desde); }
+    if (hasta) { query += ' AND p.created_at <= ?'; params.push(hasta); }
+    if (proveedor_id) { query += ' AND prov.id = ?'; params.push(proveedor_id); }
+    if (organizacion_id) { query += ' AND o.id = ?'; params.push(organizacion_id); }
+    if (q) {
+      query += ' AND (p.codigo LIKE ? OR c.nombre LIKE ? OR c.email LIKE ?)';
+      const comodin = `%${q}%`;
+      params.push(comodin, comodin, comodin);
+    }
+    query += ' ORDER BY p.created_at DESC LIMIT 300';
     const [rows] = await db.query(query, params);
     res.json(rows);
   } catch (err) {
@@ -687,6 +702,207 @@ router.put('/contenido/:clave', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error al guardar el contenido' });
+  }
+});
+
+// -------------------------------------------------
+// REPORTES / VENTAS (resumen financiero + rankings + export CSV para
+// contabilidad — pestaña "Ventas" del panel unificado)
+// -------------------------------------------------
+
+// Arma el WHERE + params compartido por /reportes/resumen y
+// /reportes/pedidos.csv, para que ambos filtren exactamente igual (si no,
+// el CSV podría no calzar con los totales del resumen que lo generó).
+// soloAprobados=true agrega "AND p.estado_pago = 'aprobado'" (el resumen
+// financiero solo cuenta ventas aprobadas); el CSV lo deja en false porque
+// Cristian quiere el registro completo del período, no solo lo aprobado.
+function armarFiltroReportes(query, { soloAprobados }) {
+  const hasta = query.hasta || new Date().toISOString();
+  const desde = query.desde || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const condiciones = ['p.created_at >= ?', 'p.created_at <= ?'];
+  const params = [desde, hasta];
+  if (soloAprobados) condiciones.push("p.estado_pago = 'aprobado'");
+  if (query.proveedor_id) { condiciones.push('p.proveedor_id = ?'); params.push(query.proveedor_id); }
+  if (query.organizacion_id) { condiciones.push('p.organizacion_id = ?'); params.push(query.organizacion_id); }
+  return { desde, hasta, where: condiciones.join(' AND '), params };
+}
+
+// GET /api/admin/reportes/resumen?desde=&hasta=&proveedor_id=&organizacion_id=
+// Sin desde/hasta, usa los últimos 30 días (mismo default que /actividad).
+// El resumen financiero SOLO considera pedidos con estado_pago='aprobado'
+// (una venta que nunca se pagó no es plata vendida ni comisión generada).
+router.get('/reportes/resumen', async (req, res) => {
+  try {
+    const { desde, hasta, where, params } = armarFiltroReportes(req.query, { soloAprobados: true });
+
+    const [[totales]] = await db.query(
+      `SELECT
+         COUNT(*) AS cantidad_pedidos,
+         COALESCE(SUM(p.monto_total), 0) AS total_vendido,
+         COALESCE(SUM(p.monto_proveedor), 0) AS total_pagado_proveedores,
+         COALESCE(SUM(p.monto_comision_afiliado), 0) AS total_comision_organizaciones,
+         COALESCE(SUM(CASE WHEN p.estado_liquidacion = 'liquidado' THEN p.monto_comision_afiliado ELSE 0 END), 0) AS comision_organizaciones_pagada,
+         COALESCE(SUM(CASE WHEN p.estado_liquidacion != 'liquidado' THEN p.monto_comision_afiliado ELSE 0 END), 0) AS comision_organizaciones_pendiente,
+         COALESCE(SUM(p.monto_comision_huayca), 0) AS total_retenido_huayca
+       FROM pedidos p
+       WHERE ${where}`,
+      params
+    );
+
+    const [rankingOrganizaciones] = await db.query(
+      `SELECT o.id, o.nombre, COUNT(*) AS cantidad_ventas, SUM(p.monto_comision_afiliado) AS comision_generada
+       FROM pedidos p
+       JOIN organizaciones o ON o.id = p.organizacion_id
+       WHERE ${where}
+       GROUP BY o.id, o.nombre
+       ORDER BY comision_generada DESC
+       LIMIT 20`,
+      params
+    );
+
+    const [rankingProductos] = await db.query(
+      `SELECT pr.id, pr.nombre, SUM(p.cantidad) AS cantidad_vendida, SUM(p.monto_total) AS monto_generado
+       FROM pedidos p
+       JOIN productos pr ON pr.id = p.producto_id
+       WHERE ${where}
+       GROUP BY pr.id, pr.nombre
+       ORDER BY monto_generado DESC
+       LIMIT 20`,
+      params
+    );
+
+    res.json({
+      rango: { desde, hasta },
+      resumen: totales,
+      ranking_organizaciones: rankingOrganizaciones,
+      ranking_productos: rankingProductos
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al generar el resumen de ventas' });
+  }
+});
+
+// GET /api/admin/reportes/pedidos.csv?desde=&hasta=&proveedor_id=&organizacion_id=
+// A diferencia de /reportes/resumen, acá NO se filtra por estado_pago —
+// Cristian quiere el registro completo del período (incluye pendientes y
+// rechazados) para llevar su propia contabilidad fuera del sistema, así
+// que la exactitud/completitud de las columnas importa más que "solo lo
+// aprobado".
+router.get('/reportes/pedidos.csv', async (req, res) => {
+  try {
+    const { desde, hasta, where, params } = armarFiltroReportes(req.query, { soloAprobados: false });
+    const [pedidos] = await db.query(
+      `SELECT p.codigo, p.created_at, p.cantidad, p.monto_proveedor, p.monto_comision_afiliado,
+              p.monto_comision_huayca, p.monto_total, p.estado_pago, p.estado_despacho,
+              c.nombre AS cliente_nombre, c.email AS cliente_email,
+              pr.nombre AS producto_nombre, prov.nombre AS proveedor_nombre,
+              o.nombre AS organizacion_nombre
+       FROM pedidos p
+       JOIN clientes c ON c.id = p.cliente_id
+       JOIN productos pr ON pr.id = p.producto_id
+       JOIN proveedores prov ON prov.id = p.proveedor_id
+       LEFT JOIN organizaciones o ON o.id = p.organizacion_id
+       WHERE ${where}
+       ORDER BY p.created_at ASC`,
+      params
+    );
+
+    // Un valor que traiga coma, comilla o salto de línea se envuelve entre
+    // comillas dobles (duplicando las comillas internas, la escapatoria
+    // estándar de CSV) — el nombre de un cliente o de una organización
+    // puede perfectamente traer una coma.
+    const csvValor = (v) => {
+      if (v === null || v === undefined) return '';
+      const s = String(v);
+      return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+    const encabezados = [
+      'fecha', 'codigo_pedido', 'cliente_nombre', 'cliente_email', 'producto', 'cantidad',
+      'organizacion', 'proveedor', 'monto_proveedor', 'monto_comision_afiliado',
+      'monto_comision_huayca', 'monto_total', 'estado_pago', 'estado_despacho'
+    ];
+    const filas = pedidos.map((p) => [
+      new Date(p.created_at).toISOString().slice(0, 10),
+      p.codigo,
+      p.cliente_nombre,
+      p.cliente_email,
+      p.producto_nombre,
+      p.cantidad,
+      p.organizacion_nombre || 'Venta directa',
+      p.proveedor_nombre,
+      p.monto_proveedor,
+      p.monto_comision_afiliado,
+      p.monto_comision_huayca,
+      p.monto_total,
+      p.estado_pago,
+      p.estado_despacho
+    ].map(csvValor).join(','));
+
+    // BOM al inicio (﻿) para que Excel en Windows detecte UTF-8 solo
+    // y no rompa las tildes/ñ al abrir el archivo directo con doble click.
+    const csv = '﻿' + [encabezados.join(','), ...filas].join('\r\n');
+    const nombreArchivo = `huayca-pedidos-${desde.slice(0, 10)}-a-${hasta.slice(0, 10)}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${nombreArchivo}"`);
+    res.send(csv);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al generar el CSV de pedidos' });
+  }
+});
+
+// -------------------------------------------------
+// CONFIGURACIÓN DEL ADMIN (perfil propio: email + cambio de contraseña)
+// -------------------------------------------------
+
+// GET /api/admin/me
+router.get('/me', async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT id, nombre, email, rol FROM administradores WHERE id = ?', [req.user.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Administrador no encontrado' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al obtener el perfil' });
+  }
+});
+
+// PUT /api/admin/me  Body: { nombre, email }
+router.put('/me', async (req, res) => {
+  try {
+    const { nombre, email } = req.body;
+    if (!nombre || !email) return res.status(400).json({ error: 'nombre y email son obligatorios' });
+    const [existente] = await db.query('SELECT id FROM administradores WHERE email = ? AND id != ?', [email, req.user.id]);
+    if (existente.length) return res.status(409).json({ error: 'Ya existe otro administrador con ese email' });
+    await db.query('UPDATE administradores SET nombre = ?, email = ? WHERE id = ?', [nombre, email, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al actualizar el perfil' });
+  }
+});
+
+// PUT /api/admin/me/password  Body: { password_actual, password_nueva }
+router.put('/me/password', async (req, res) => {
+  try {
+    const { password_actual, password_nueva } = req.body;
+    if (!password_actual || !password_nueva) {
+      return res.status(400).json({ error: 'password_actual y password_nueva son obligatorios' });
+    }
+    if (password_nueva.length < 8) {
+      return res.status(400).json({ error: 'La contraseña nueva debe tener al menos 8 caracteres' });
+    }
+    const [rows] = await db.query('SELECT password_hash FROM administradores WHERE id = ?', [req.user.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Administrador no encontrado' });
+    const valido = await bcrypt.compare(password_actual, rows[0].password_hash);
+    if (!valido) return res.status(401).json({ error: 'La contraseña actual no es correcta' });
+    const nuevoHash = await bcrypt.hash(password_nueva, 10);
+    await db.query('UPDATE administradores SET password_hash = ? WHERE id = ?', [nuevoHash, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al cambiar la contraseña' });
   }
 });
 

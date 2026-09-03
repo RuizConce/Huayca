@@ -22,12 +22,16 @@ src/routes/tickets.js          → devoluciones/garantías
 src/routes/admin.js            → login admin, aprobar/rechazar organizaciones, CRUD proveedores/productos/categorías
 scripts/migrate.js             → corre schema.sql contra la base conectada
 scripts/seed.js                → carga admin + proveedor PROTEGE+ + productos + organización demo
-public/admin.html               → panel de administración (HTML/JS puro, sin build), servido como estático
-public/admin-contenido.html     → panel de contenido del sitio (CMS liviano), enlazado desde admin.html
-public/admin-organizaciones.html → aprobar/rechazar/suspender/reactivar organizaciones, enlazado desde admin.html
-public/admin-logistica.html     → pedidos aprobados pendientes de despacho, agrupados por proveedor
-public/admin-actividad.html     → dashboard del embudo de conversión (eventos_actividad)
-public/admin-sincronizar-pago.html → plan B manual: consulta y sincroniza un pago contra Mercado Pago
+public/admin-panel.html          → shell del panel: login + pestañas persistentes, punto de entrada único
+public/admin.html               → pestaña "Marcas y Productos" (HTML/JS puro, sin build), cargada en iframe por admin-panel.html
+public/admin-contenido.html     → pestaña "Contenido del sitio" (CMS liviano)
+public/admin-organizaciones.html → pestaña "Organizaciones": aprobar/rechazar/suspender/reactivar
+public/admin-pedidos.html       → pestaña "Pedidos": listado filtrable + marcar pagado
+public/admin-logistica.html     → pestaña "Logística": pedidos aprobados pendientes de despacho, agrupados por proveedor
+public/admin-actividad.html     → pestaña "Actividad": dashboard del embudo de conversión (eventos_actividad)
+public/admin-ventas.html        → pestaña "Ventas": resumen financiero + rankings + export CSV
+public/admin-sincronizar-pago.html → pestaña "Sincronizar pago": plan B manual, consulta y sincroniza un pago contra Mercado Pago
+public/admin-configuracion.html → pestaña "Configuración": email/nombre y cambio de contraseña del admin
 public/index.html, catalogo.html, producto.html, checkout.html, pago-resultado.html,
 public/organizaciones.html, organizacion-registro/login/dashboard.html
                                  → frontend público (HTML/JS puro, sin build), servido como estático
@@ -39,7 +43,11 @@ src/routes/eventos.js           → POST /api/eventos (público, tracking del em
 
 ## Panel de administración
 
-`public/admin.html` es un panel liviano (login, gestión de marcas/proveedores con logo, y sus productos con precio/comisiones) servido directo por Express en `/admin.html` — vive en el mismo dominio que la API, así que no hay problemas de CORS y usa `localStorage` para el token del admin. Consume `POST /api/admin/login`, `GET/POST /api/admin/proveedores` y `GET/POST/PUT /api/admin/productos` (con filtro `?proveedor_id=`).
+El punto de entrada único es **`public/admin-panel.html`** — un shell con login (`POST /api/admin/login`) y una barra de pestañas persistente (Marcas y Productos, Organizaciones, Pedidos, Logística, Actividad, Ventas, Sincronizar pago, Contenido del sitio, Configuración) servido directo por Express, mismo dominio que la API. Cada pestaña es, por dentro, una de las páginas de admin que ya existían (`admin.html`, `admin-organizaciones.html`, `admin-logistica.html`, etc.) sin reescribir — el shell las carga en un `<iframe src="admin-xxx.html?embed=1">` la primera vez que se visita esa pestaña y después solo la esconde/muestra (nunca la destruye), así que cambiar de pestaña no recarga nada y el estado de cada una (filtros, scroll, un formulario a medio llenar) queda intacto al volver. `?tab=<clave>` en la URL del shell fija la pestaña inicial; cada pestaña actualiza esa URL sin navegar (`history.replaceState`) para que recargar la página completa vuelva al mismo lugar.
+
+**Modo `?embed=1`:** cada página de admin detecta este parámetro y, si está presente, oculta su propio `<header>` (el shell ya tiene la barra de pestañas) y, en vez de navegar el iframe cuando no hay token o la sesión expira (401/403), avisa al shell por `postMessage({ type: 'huayca-logout' })` — el shell escucha ese mensaje y cierra sesión de las 9 pestañas a la vez, no solo la que detectó el problema. El login es uno solo porque las 9 páginas viven en el mismo origen y comparten el mismo `localStorage` (`huayca_admin_token`) — el shell no le "pasa" el token a los iframes de ninguna forma especial, cada uno lo lee directo de ahí. Acceder directo a cualquier `admin-xxx.html` sin `?embed=1` (ej. un bookmark viejo) reenvía automáticamente a `admin-panel.html?tab=xxx`, así ya no quedan dos formas distintas de navegar el panel.
+
+`public/admin.html` (pestaña "Marcas y Productos") consume `GET/POST /api/admin/proveedores` y `GET/POST/PUT /api/admin/productos` (con filtro `?proveedor_id=`).
 
 **Restricción de productos por región:** al crear/editar un producto hay un checkbox "¿Este producto tiene restricción de región?"; si se activa, aparece un multi-select con las 16 regiones de Chile (mismo dataset que el checkout, ver más abajo) para elegir dónde se despacha. Se guarda en `productos.regiones_disponibles` (columna JSON). El formulario siempre reenvía el estado completo, así que `PUT /api/admin/productos/:id` escribe esa columna sin `COALESCE` (a diferencia del resto de los campos del UPDATE) — si no lo hiciera así, sería imposible quitarle la restricción a un producto una vez puesta, porque `COALESCE(?, valor_actual)` nunca deja pasar un `null` explícito.
 
@@ -153,6 +161,21 @@ Trackea el recorrido de una visita — sin cuentas de usuario — vía un `sessi
 
 `GET /api/admin/actividad?desde=ISO&hasta=ISO` (por defecto, últimos 30 días) agrega todo esto: totales por tipo, tasa de abandono (`(inicio_checkout - compra_completada) / inicio_checkout`), top 5 productos más vistos, y la lista de "carritos abandonados" — sesiones con `inicio_checkout` en el rango que **nunca** (en ninguna fecha, no solo dentro del rango) dispararon `compra_completada`.
 
+## Pedidos (`admin-pedidos.html`)
+
+Vista general de pedidos para el equipo Huayca, con filtros combinables (rango de fecha, estado de pago, estado de despacho, organización, proveedor y una búsqueda por código/nombre/email) sobre `GET /api/admin/pedidos`, que ahora acepta `desde=`, `hasta=`, `proveedor_id=`, `organizacion_id=` y `q=` además de los `estado_pago=`/`estado_despacho=` que ya usaba Logística (todos opcionales — sin ellos, el endpoint se comporta exactamente igual que antes). Incluye un botón "Marcar pagado" para los pedidos `pendiente`, que reutiliza `PATCH /api/admin/pedidos/:id/marcar-pagado` (mismo servicio que usa el webhook de Mercado Pago, así que activa las comisiones igual).
+
+## Ventas / reportes financieros (`admin-ventas.html`)
+
+Dashboard de control de ventas para llevar contabilidad fuera del sistema: selector de rango (presets Hoy/7 días/30 días + fechas personalizadas) y filtros opcionales por proveedor/organización, sobre dos rutas nuevas:
+
+- **`GET /api/admin/reportes/resumen?desde=&hasta=&proveedor_id=&organizacion_id=`** — resumen financiero del período **solo sobre pedidos con `estado_pago='aprobado'`** (una venta que nunca se pagó no es plata vendida ni comisión generada): total vendido (`SUM(monto_total)`), total pagado a proveedores (`SUM(monto_proveedor)`), comisión de organizaciones generada (`SUM(monto_comision_afiliado)`, separada en pagada vs. pendiente de liquidar según `estado_liquidacion`), total retenido por Huayca (`SUM(monto_comision_huayca)`) y cantidad de pedidos aprobados — más dos rankings: organizaciones por comisión generada y productos por monto vendido (no confundir con "más vistos" de Actividad, acá es venta real).
+- **`GET /api/admin/reportes/pedidos.csv?desde=&hasta=&proveedor_id=&organizacion_id=`** — descarga un CSV (una fila por pedido, con BOM UTF-8 para que Excel en Windows no rompa tildes/ñ) con columnas `fecha, codigo_pedido, cliente_nombre, cliente_email, producto, cantidad, organizacion, proveedor, monto_proveedor, monto_comision_afiliado, monto_comision_huayca, monto_total, estado_pago, estado_despacho`. A diferencia del resumen, el CSV **no** filtra por `estado_pago` — trae el registro completo del período (incluye pendientes y rechazados) porque es lo que Cristian usa para su propia contabilidad, donde la completitud importa más que "solo lo aprobado". El nombre del archivo es descriptivo (`huayca-pedidos-2026-08-01-a-2026-08-31.csv`) y se descarga con un `fetch` autenticado (no un link plano, porque la ruta exige el Bearer token) que arma un blob y dispara la descarga a mano.
+
+## Configuración del admin (`admin-configuracion.html`)
+
+Autogestión de la propia cuenta de administrador: cambiar nombre/email (`GET/PUT /api/admin/me`) y cambiar la contraseña (`PUT /api/admin/me/password`, pide la contraseña actual y valida mínimo 8 caracteres en la nueva). No hay recuperación de contraseña por email todavía — si alguien pierde el acceso, hay que actualizar `password_hash` directo en la base.
+
 ## Rutas de administración
 
 Todo bajo `/api/admin` requiere `POST /api/admin/login` primero (tabla `administradores`, no confundir con el login de organizaciones):
@@ -161,8 +184,10 @@ Todo bajo `/api/admin` requiere `POST /api/admin/login` primero (tabla `administ
 - Proveedores: `GET/POST /proveedores`, `PUT/DELETE /proveedores/:id` (delete = baja lógica a `inactivo`).
 - Categorías: `GET/POST /categorias`.
 - Productos: `GET/POST /productos`, `PUT/DELETE /productos/:id` (delete = baja lógica a `pausado`). Acá se fijan `precio_proveedor`, `comision_afiliado` y `comision_huayca`.
-- Pedidos (operación): `GET /pedidos`, `PATCH /pedidos/:id/marcar-pagado`, `PATCH /pedidos/:id/despacho`, `POST /pedidos/:id/sincronizar-pago` (plan B manual, ver arriba).
+- Pedidos (operación): `GET /pedidos` (filtros opcionales `estado_pago`, `estado_despacho`, `desde`, `hasta`, `proveedor_id`, `organizacion_id`, `q`), `PATCH /pedidos/:id/marcar-pagado`, `PATCH /pedidos/:id/despacho`, `POST /pedidos/:id/sincronizar-pago` (plan B manual, ver arriba).
 - Actividad: `GET /actividad?desde=&hasta=` (ver sección de arriba).
+- Reportes/ventas: `GET /reportes/resumen?desde=&hasta=&proveedor_id=&organizacion_id=`, `GET /reportes/pedidos.csv?...` (ver sección de arriba).
+- Perfil propio: `GET/PUT /me`, `PUT /me/password`.
 
 ## Variables de entorno
 

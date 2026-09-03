@@ -207,6 +207,23 @@ let token = localStorage.getItem('huayca_admin_token') || '';
 let marcaActualId = null;
 let marcasCache = [];
 
+// Modo "embed": esta página vive dentro de un <iframe> del panel unificado
+// (admin-panel.html), como la pestaña "Marcas y Productos". En ese modo se
+// oculta el header propio (el shell ya tiene su barra de pestañas) y, al
+// cerrar sesión, además de mostrar el login local se avisa al shell por
+// postMessage para que cierre la sesión de TODAS las pestañas a la vez.
+const EMBED = new URLSearchParams(window.location.search).get('embed') === '1';
+// Acceso directo a admin.html (no embebido): se reenvía al panel unificado,
+// que es ahora el único punto de entrada — admin.html sigue existiendo tal
+// cual por dentro porque el shell lo carga como su pestaña "Marcas y
+// Productos" en un <iframe>, pero ya no se navega a él directamente.
+if (!EMBED) { window.location.replace('admin-panel.html'); }
+if (EMBED) {
+  const h = document.querySelector('header');
+  if (h) h.style.display = 'none';
+  if (!token) parent.postMessage({ type: 'huayca-logout' }, '*');
+}
+
 // ---------- Auth ----------
 async function login() {
   const email = document.getElementById('loginEmail').value;
@@ -243,6 +260,7 @@ function logout() {
   document.getElementById('linkActividad').classList.add('hidden');
   document.getElementById('linkSincronizarPago').classList.add('hidden');
   document.getElementById('loginBox').classList.remove('hidden');
+  if (EMBED) parent.postMessage({ type: 'huayca-logout' }, '*');
 }
 
 function mostrarApp() {

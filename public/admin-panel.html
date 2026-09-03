@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Huayca — Panel de Administración</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { font-family: -apple-system, 'Segoe UI', sans-serif; margin: 0; background: #f4f5f2; color: #1a1a1a; display: flex; flex-direction: column; }
+  .hidden { display: none !important; }
+
+  /* Login (idéntico al de admin.html — un solo lugar para iniciar sesión) */
+  #loginBox { max-width: 360px; margin: 60px auto; background: white; padding: 24px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+  #loginBox h2 { margin-top: 0; color: #0d2b4e; font-size: 18px; }
+  #loginBox input { width: 100%; padding: 10px; margin-top: 6px; margin-bottom: 14px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
+  #loginBox button { width: 100%; background: #e8801e; color: white; border: none; padding: 12px; border-radius: 6px; font-size: 15px; font-weight: 600; cursor: pointer; }
+  #loginError { color: #c0392b; font-size: 13px; margin-top: 8px; min-height: 16px; }
+
+  /* Shell: header fijo + barra de pestañas + área de contenido */
+  header.top { background: #0d2b4e; color: white; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+  header.top h1 { font-size: 17px; margin: 0; white-space: nowrap; }
+  header.top button { background: transparent; border: 1px solid #ffffff55; color: white; padding: 6px 12px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+
+  .tabs-bar { background: #0f3560; display: flex; overflow-x: auto; flex-shrink: 0; padding: 0 12px; }
+  .tabs-bar::-webkit-scrollbar { height: 4px; }
+  .tab-btn {
+    background: transparent; border: none; color: #ffffffb0; padding: 12px 16px; font-size: 13.5px;
+    font-weight: 600; cursor: pointer; white-space: nowrap; border-bottom: 3px solid transparent; flex-shrink: 0;
+  }
+  .tab-btn:hover { color: white; }
+  .tab-btn.activo { color: white; border-bottom-color: #e8801e; }
+
+  #contenido { flex: 1; min-height: 0; position: relative; }
+  #contenido iframe {
+    position: absolute; inset: 0; width: 100%; height: 100%; border: none;
+  }
+  .estado-carga-iframe {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: #999; font-size: 14px; background: #f4f5f2;
+  }
+</style>
+</head>
+<body>
+
+<div id="loginBox">
+  <h2>🤝 Huayca — Admin</h2>
+  <label>Email</label>
+  <input id="loginEmail" type="email" placeholder="admin@huayca.cl">
+  <label>Contraseña</label>
+  <input id="loginPassword" type="password">
+  <button onclick="login()">Entrar</button>
+  <div id="loginError"></div>
+</div>
+
+<div id="shell" class="hidden" style="display:flex; flex-direction:column; height:100%;">
+  <header class="top">
+    <h1>🤝 Huayca — Admin</h1>
+    <button onclick="logout()">Cerrar sesión</button>
+  </header>
+  <nav class="tabs-bar" id="tabsBar"></nav>
+  <div id="contenido"></div>
+</div>
+
+<script>
+const BASE_URL = window.location.origin;
+let token = localStorage.getItem('huayca_admin_token') || '';
+
+// Cada pestaña carga la página existente que ya implementaba esa sección,
+// dentro de un <iframe> con ?embed=1 (ver el patch de "modo embed" agregado
+// a cada una de esas páginas: oculta su propio header y, si la sesión se
+// cierra o expira ahí adentro, avisa a este shell por postMessage en vez de
+// navegar solo el iframe). Como todas viven en el mismo origen, comparten
+// el mismo localStorage — el token de acá es el mismo que ellas leen, así
+// que no hace falta "pasarlo" de ningún modo especial.
+const TABS = [
+  { key: 'marcas',            label: 'Marcas y Productos', src: 'admin.html' },
+  { key: 'organizaciones',    label: 'Organizaciones',     src: 'admin-organizaciones.html' },
+  { key: 'pedidos',           label: 'Pedidos',            src: 'admin-pedidos.html' },
+  { key: 'logistica',         label: 'Logística',          src: 'admin-logistica.html' },
+  { key: 'actividad',         label: 'Actividad',          src: 'admin-actividad.html' },
+  { key: 'ventas',            label: 'Ventas',             src: 'admin-ventas.html' },
+  { key: 'sincronizar-pago',  label: 'Sincronizar pago',   src: 'admin-sincronizar-pago.html' },
+  { key: 'contenido',         label: 'Contenido del sitio',src: 'admin-contenido.html' },
+  { key: 'configuracion',     label: 'Configuración',      src: 'admin-configuracion.html' }
+];
+
+let tabActual = null;
+const iframesMontados = {}; // key -> elemento <iframe>, una vez creado nunca se destruye
+
+function login() {
+  const email = document.getElementById('loginEmail').value;
+  const password = document.getElementById('loginPassword').value;
+  const errBox = document.getElementById('loginError');
+  errBox.textContent = '';
+  fetch(BASE_URL + '/api/admin/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password })
+  })
+    .then((res) => res.json().then((data) => ({ res, data })))
+    .then(({ res, data }) => {
+      if (!res.ok || !data.token) {
+        errBox.textContent = data.error || 'Credenciales inválidas';
+        return;
+      }
+      token = data.token;
+      localStorage.setItem('huayca_admin_token', token);
+      mostrarShell();
+    })
+    .catch((e) => { errBox.textContent = 'Error de conexión: ' + e.message; });
+}
+
+function logout() {
+  token = '';
+  localStorage.removeItem('huayca_admin_token');
+  document.getElementById('shell').classList.add('hidden');
+  document.getElementById('loginBox').classList.remove('hidden');
+  document.getElementById('loginPassword').value = '';
+  // Se destruyen los iframes montados: si vuelve a iniciar sesión (misma
+  // pestaña del navegador, sin recargar), no queremos que sigan mostrando
+  // datos de la sesión anterior ni volver a intentar leer un token viejo.
+  document.getElementById('contenido').innerHTML = '';
+  Object.keys(iframesMontados).forEach((k) => delete iframesMontados[k]);
+  tabActual = null;
+}
+
+function mostrarShell() {
+  document.getElementById('loginBox').classList.add('hidden');
+  document.getElementById('shell').classList.remove('hidden');
+  renderTabs();
+  const params = new URLSearchParams(window.location.search);
+  const tabPedida = params.get('tab');
+  const inicial = TABS.some((t) => t.key === tabPedida) ? tabPedida : TABS[0].key;
+  irATab(inicial);
+}
+
+function renderTabs() {
+  const bar = document.getElementById('tabsBar');
+  bar.innerHTML = TABS.map((t) => `
+    <button type="button" class="tab-btn" data-key="${t.key}" onclick="irATab('${t.key}')">${t.label}</button>
+  `).join('');
+}
+
+// Cambiar de pestaña NO recarga nada: el iframe de cada sección se crea
+// una sola vez la primera vez que se visita y después solo se
+// muestra/oculta (display none no destruye su estado interno — sigue ahí
+// el filtro, el scroll, el formulario a medio llenar, etc.). Así, saltar
+// de "Pedidos" a "Logística" y volver deja "Pedidos" exactamente como se
+// dejó.
+function irATab(key) {
+  const tab = TABS.find((t) => t.key === key);
+  if (!tab) return;
+  tabActual = key;
+
+  document.querySelectorAll('.tab-btn').forEach((b) => b.classList.toggle('activo', b.dataset.key === key));
+
+  // Actualiza la URL (sin navegar) para que recargar la página completa
+  // vuelva a la misma pestaña, y para que los links viejos a
+  // admin-xxx.html (que ahora reenvían acá con ?tab=xxx) aterricen bien.
+  const url = new URL(window.location.href);
+  url.searchParams.set('tab', key);
+  window.history.replaceState(null, '', url);
+
+  Object.entries(iframesMontados).forEach(([k, el]) => {
+    el.classList.toggle('hidden', k !== key);
+  });
+
+  if (!iframesMontados[key]) {
+    const cont = document.getElementById('contenido');
+    const iframe = document.createElement('iframe');
+    iframe.src = tab.src + '?embed=1';
+    iframe.title = tab.label;
+    cont.appendChild(iframe);
+    iframesMontados[key] = iframe;
+  }
+}
+
+// Las páginas embebidas avisan por acá cuando no hay token o la sesión
+// expiró (401/403) adentro de un iframe, en vez de navegarse ellas solas
+// — así la sesión se cierra de una sola vez para las 9 pestañas, no
+// dejando 8 de ellas mostrando datos con un token que ya no sirve.
+window.addEventListener('message', (ev) => {
+  if (ev.origin !== window.location.origin) return;
+  if (ev.data && ev.data.type === 'huayca-logout') logout();
+});
+
+// ---------- Init ----------
+if (token) mostrarShell();
+</script>
+
+</body>
+</html>

@@ -104,8 +104,23 @@
 
 <script>
 const BASE_URL = window.location.origin;
+// Modo "embed": esta página vive dentro de un <iframe> del panel unificado
+// (admin-panel.html). En ese modo se oculta el header propio (el shell ya
+// tiene su propia barra de pestañas) y, en vez de navegar el iframe cuando
+// no hay token / expira la sesión, se avisa al shell por postMessage para
+// que sea ÉL quien vuelva a mostrar el login — así toda la sesión se cierra
+// de una vez, no solo esta pestaña.
+const EMBED = new URLSearchParams(window.location.search).get('embed') === '1';
+// Acceso directo (no embebido): esta sección ahora vive como pestaña del
+// panel unificado — se reenvía para que no queden dos formas de navegar.
+if (!EMBED) { window.location.replace('admin-panel.html?tab=organizaciones'); }
+if (EMBED) { const h = document.querySelector('header'); if (h) h.style.display = 'none'; }
+function volverAlPanel() {
+  if (EMBED) { parent.postMessage({ type: 'huayca-logout' }, '*'); return; }
+  window.location.href = 'admin.html';
+}
 const token = localStorage.getItem('huayca_admin_token') || '';
-if (!token) window.location.href = 'admin.html';
+if (!token) volverAlPanel();
 
 let estadoActual = 'pendiente';
 let orgsCache = [];
@@ -123,7 +138,7 @@ const ESTADO_LABEL = { pendiente: 'Pendiente', aprobada: 'Aprobada', rechazada: 
 
 function cerrarSesion() {
   localStorage.removeItem('huayca_admin_token');
-  window.location.href = 'admin.html';
+  volverAlPanel();
 }
 
 function authHeaders() {

@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Huayca — Configuración</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, 'Segoe UI', sans-serif; margin: 0; background: #f4f5f2; color: #1a1a1a; }
+  header { background: #0d2b4e; color: white; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  header h1 { font-size: 18px; margin: 0; }
+  header a.volver { color: #ffffffcc; font-size: 13px; }
+  header button { background: transparent; border: 1px solid #ffffff55; color: white; padding: 6px 12px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+  main { max-width: 560px; margin: 0 auto; padding: 20px; }
+  .hidden { display: none !important; }
+
+  .seccion-card { background: white; border-radius: 12px; padding: 22px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 18px; }
+  .seccion-card h2 { margin: 0 0 4px; color: #0d2b4e; font-size: 17px; }
+  .seccion-card .desc { color: #888; font-size: 13px; margin: 0 0 18px; line-height: 1.5; }
+  label { display: block; font-size: 13px; color: #555; margin-top: 14px; margin-bottom: 5px; }
+  input { width: 100%; padding: 10px 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
+  .btn-guardar { background: #e8801e; color: white; border: none; padding: 11px; border-radius: 6px; font-size: 14px; font-weight: 700; cursor: pointer; margin-top: 18px; width: 100%; }
+  .btn-guardar:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  .resultado { margin-top: 14px; padding: 12px 14px; border-radius: 8px; font-size: 13.5px; line-height: 1.5; }
+  .resultado.ok { background: #e7f5ec; color: #145c37; }
+  .resultado.error { background: #fdeeee; color: #c0392b; }
+  #estadoCarga { text-align: center; padding: 60px 20px; color: #888; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <a href="admin.html" class="volver">← Volver al panel</a>
+    <h1 style="margin-top:4px;">⚙️ Configuración</h1>
+  </div>
+  <button onclick="cerrarSesion()">Cerrar sesión</button>
+</header>
+
+<main>
+  <div id="estadoCarga">Cargando…</div>
+
+  <div id="app" class="hidden">
+    <div class="seccion-card">
+      <h2>Datos de la cuenta</h2>
+      <p class="desc">Nombre y email con los que iniciás sesión en el panel.</p>
+      <label>Nombre</label>
+      <input id="perfilNombre">
+      <label>Email</label>
+      <input id="perfilEmail" type="email">
+      <button class="btn-guardar" onclick="guardarPerfil()">Guardar datos</button>
+      <div id="resultadoPerfil" class="resultado hidden"></div>
+    </div>
+
+    <div class="seccion-card">
+      <h2>Cambiar contraseña</h2>
+      <p class="desc">Necesitás la contraseña actual para poder cambiarla.</p>
+      <label>Contraseña actual</label>
+      <input id="passActual" type="password">
+      <label>Contraseña nueva</label>
+      <input id="passNueva" type="password" placeholder="Mínimo 8 caracteres">
+      <label>Repetir contraseña nueva</label>
+      <input id="passNuevaRepetir" type="password">
+      <button class="btn-guardar" onclick="cambiarPassword()">Cambiar contraseña</button>
+      <div id="resultadoPassword" class="resultado hidden"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+const BASE_URL = window.location.origin;
+// Modo "embed": ver el comentario equivalente en admin-organizaciones.html.
+const EMBED = new URLSearchParams(window.location.search).get('embed') === '1';
+if (!EMBED) { window.location.replace('admin-panel.html?tab=configuracion'); }
+if (EMBED) { const h = document.querySelector('header'); if (h) h.style.display = 'none'; }
+function volverAlPanel() {
+  if (EMBED) { parent.postMessage({ type: 'huayca-logout' }, '*'); return; }
+  window.location.href = 'admin.html';
+}
+const token = localStorage.getItem('huayca_admin_token') || '';
+if (!token) volverAlPanel();
+
+function cerrarSesion() {
+  localStorage.removeItem('huayca_admin_token');
+  volverAlPanel();
+}
+
+function authHeaders() {
+  return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
+}
+
+async function apiFetch(path, options = {}) {
+  const res = await fetch(BASE_URL + path, { ...options, headers: { ...authHeaders(), ...(options.headers || {}) } });
+  if (res.status === 401 || res.status === 403) {
+    cerrarSesion();
+    throw new Error('Sesión expirada, inicia sesión de nuevo');
+  }
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Error en la petición');
+  return data;
+}
+
+function mostrarResultado(id, msg, esError) {
+  const box = document.getElementById(id);
+  box.textContent = msg;
+  box.classList.remove('hidden', 'ok', 'error');
+  box.classList.add(esError ? 'error' : 'ok');
+}
+
+async function cargar() {
+  try {
+    const admin = await apiFetch('/api/admin/me');
+    document.getElementById('perfilNombre').value = admin.nombre || '';
+    document.getElementById('perfilEmail').value = admin.email || '';
+    document.getElementById('estadoCarga').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+  } catch (e) {
+    document.getElementById('estadoCarga').textContent = 'Error al cargar: ' + e.message;
+  }
+}
+
+async function guardarPerfil() {
+  const btn = event.target;
+  const nombre = document.getElementById('perfilNombre').value.trim();
+  const email = document.getElementById('perfilEmail').value.trim();
+  if (!nombre || !email) { mostrarResultado('resultadoPerfil', 'Nombre y email son obligatorios.', true); return; }
+  btn.disabled = true;
+  try {
+    await apiFetch('/api/admin/me', { method: 'PUT', body: JSON.stringify({ nombre, email }) });
+    mostrarResultado('resultadoPerfil', 'Datos actualizados ✓', false);
+  } catch (e) {
+    mostrarResultado('resultadoPerfil', e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function cambiarPassword() {
+  const btn = event.target;
+  const actual = document.getElementById('passActual').value;
+  const nueva = document.getElementById('passNueva').value;
+  const repetir = document.getElementById('passNuevaRepetir').value;
+  if (!actual || !nueva) { mostrarResultado('resultadoPassword', 'Completá ambos campos de contraseña.', true); return; }
+  if (nueva.length < 8) { mostrarResultado('resultadoPassword', 'La contraseña nueva debe tener al menos 8 caracteres.', true); return; }
+  if (nueva !== repetir) { mostrarResultado('resultadoPassword', 'La contraseña nueva no coincide en ambos campos.', true); return; }
+  btn.disabled = true;
+  try {
+    await apiFetch('/api/admin/me/password', { method: 'PUT', body: JSON.stringify({ password_actual: actual, password_nueva: nueva }) });
+    mostrarResultado('resultadoPassword', 'Contraseña cambiada ✓', false);
+    document.getElementById('passActual').value = '';
+    document.getElementById('passNueva').value = '';
+    document.getElementById('passNuevaRepetir').value = '';
+  } catch (e) {
+    mostrarResultado('resultadoPassword', e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+cargar();
+</script>
+
+</body>
+</html>

@@ -70,12 +70,20 @@
 
 <script>
 const BASE_URL = window.location.origin;
+// Modo "embed": ver el comentario equivalente en admin-organizaciones.html.
+const EMBED = new URLSearchParams(window.location.search).get('embed') === '1';
+if (!EMBED) { window.location.replace('admin-panel.html?tab=sincronizar-pago'); }
+if (EMBED) { const h = document.querySelector('header'); if (h) h.style.display = 'none'; }
+function volverAlPanel() {
+  if (EMBED) { parent.postMessage({ type: 'huayca-logout' }, '*'); return; }
+  window.location.href = 'admin.html';
+}
 const token = localStorage.getItem('huayca_admin_token') || '';
-if (!token) window.location.href = 'admin.html';
+if (!token) volverAlPanel();
 
 function cerrarSesion() {
   localStorage.removeItem('huayca_admin_token');
-  window.location.href = 'admin.html';
+  volverAlPanel();
 }
 
 function mostrarResultado(clase, html) {

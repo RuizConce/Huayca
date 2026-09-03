@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Huayca — Ventas</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, 'Segoe UI', sans-serif; margin: 0; background: #f4f5f2; color: #1a1a1a; }
+  header { background: #0d2b4e; color: white; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  header h1 { font-size: 18px; margin: 0; }
+  header .der { display: flex; align-items: center; gap: 10px; }
+  header a.volver { color: #ffffffcc; font-size: 13px; }
+  header button { background: transparent; border: 1px solid #ffffff55; color: white; padding: 6px 12px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+  main { max-width: 1080px; margin: 0 auto; padding: 20px; }
+  .hidden { display: none !important; }
+
+  .filtros-card { background: white; border-radius: 12px; padding: 16px 18px; margin-bottom: 18px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+  .rango-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .rango-tab {
+    background: white; border: 1px solid #e4e2db; color: #555; padding: 8px 16px;
+    border-radius: 20px; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .rango-tab.activo { background: #0d2b4e; border-color: #0d2b4e; color: white; }
+  .filtros-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; align-items: end; }
+  .filtros-grid label { display: block; font-size: 11.5px; color: #888; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.02em; }
+  .filtros-grid input, .filtros-grid select { width: 100%; padding: 8px 9px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; }
+  .filtros-acciones { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .btn-primary { background: #e8801e; color: white; border: none; padding: 9px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .btn-secondary { background: white; color: #0d2b4e; border: 1px solid #ccc; padding: 9px 14px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+  .btn-csv { background: #1e8e3e; color: white; border: none; padding: 9px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+
+  .tarjetas-resumen { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 20px; }
+  .tarjeta { background: white; border-radius: 12px; padding: 18px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+  .tarjeta .valor { font-size: 22px; font-weight: 800; color: #0d2b4e; }
+  .tarjeta .valor.naranjo { color: #e8801e; }
+  .tarjeta .valor.verde { color: #1e8e3e; }
+  .tarjeta .etiqueta { font-size: 12.5px; color: #888; margin-top: 4px; }
+  .tarjeta .subvalor { font-size: 11.5px; color: #999; margin-top: 6px; }
+  .tarjeta .subvalor b { color: #1e8e3e; }
+  .tarjeta .subvalor .pend { color: #e8801e; }
+
+  .seccion-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 18px; }
+  .seccion-card h2 { margin: 0 0 4px; color: #0d2b4e; font-size: 16px; }
+  .seccion-card .desc { color: #888; font-size: 12.5px; margin: 0 0 14px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 9px 6px; font-size: 13px; border-bottom: 1px solid #f0efe9; }
+  th { color: #999; font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.02em; }
+  td.num { text-align: right; font-weight: 700; color: #0d2b4e; }
+
+  .estado-vacio { text-align: center; padding: 30px 20px; color: #999; font-size: 13.5px; }
+  #estadoCarga { text-align: center; padding: 60px 20px; color: #888; }
+  #errorBanner { background: #fdeeee; color: #c0392b; padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; font-size: 13px; }
+
+  @media (max-width: 680px) { .tarjetas-resumen { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <a href="admin.html" class="volver">← Volver al panel</a>
+    <h1 style="margin-top:4px;">💰 Ventas</h1>
+  </div>
+  <div class="der">
+    <button onclick="cerrarSesion()">Cerrar sesión</button>
+  </div>
+</header>
+
+<main>
+  <div id="estadoCarga">Cargando ventas…</div>
+
+  <div id="app" class="hidden">
+    <div id="errorBanner" class="hidden"></div>
+
+    <div class="filtros-card">
+      <div class="rango-tabs" id="rangoTabs">
+        <button type="button" class="rango-tab" data-rango="hoy" onclick="cambiarRango('hoy')">Hoy</button>
+        <button type="button" class="rango-tab" data-rango="7d" onclick="cambiarRango('7d')">Últimos 7 días</button>
+        <button type="button" class="rango-tab" data-rango="30d" onclick="cambiarRango('30d')">Últimos 30 días</button>
+        <button type="button" class="rango-tab" data-rango="personalizado" onclick="cambiarRango('personalizado')">Personalizado</button>
+      </div>
+      <div class="filtros-grid">
+        <div>
+          <label>Desde</label>
+          <input type="date" id="fDesde" onchange="cambiarRango('personalizado')">
+        </div>
+        <div>
+          <label>Hasta</label>
+          <input type="date" id="fHasta" onchange="cambiarRango('personalizado')">
+        </div>
+        <div>
+          <label>Proveedor</label>
+          <select id="fProveedor"><option value="">Todos</option></select>
+        </div>
+        <div>
+          <label>Organización</label>
+          <select id="fOrganizacion"><option value="">Todas</option></select>
+        </div>
+      </div>
+      <div class="filtros-acciones">
+        <button class="btn-primary" onclick="cargar()">Aplicar filtros</button>
+        <button class="btn-csv" onclick="descargarCsv()">⬇ Descargar CSV de pedidos</button>
+      </div>
+    </div>
+
+    <div class="tarjetas-resumen">
+      <div class="tarjeta">
+        <div class="valor" id="valVendido">$0</div>
+        <div class="etiqueta">Total vendido (<span id="valCantidad">0</span> pedidos aprobados)</div>
+      </div>
+      <div class="tarjeta">
+        <div class="valor" id="valProveedores">$0</div>
+        <div class="etiqueta">Pagado a proveedores</div>
+      </div>
+      <div class="tarjeta">
+        <div class="valor naranjo" id="valHuayca">$0</div>
+        <div class="etiqueta">Retenido por Huayca</div>
+      </div>
+      <div class="tarjeta" style="grid-column: span 3;">
+        <div class="valor verde" id="valComisionTotal">$0</div>
+        <div class="etiqueta">Comisiones de organizaciones generadas en el período</div>
+        <div class="subvalor">Liquidado: <b id="valComisionPagada">$0</b> · Pendiente de liquidar: <span class="pend" id="valComisionPendiente">$0</span></div>
+      </div>
+    </div>
+
+    <div class="seccion-card">
+      <h2>Organizaciones que más venden</h2>
+      <p class="desc">Ranking por comisión generada en el período.</p>
+      <table>
+        <thead><tr><th>Organización</th><th style="text-align:right;">Ventas</th><th style="text-align:right;">Comisión generada</th></tr></thead>
+        <tbody id="tablaOrganizaciones"></tbody>
+      </table>
+      <div class="estado-vacio hidden" id="vacioOrganizaciones">Sin ventas vía organizaciones en este rango.</div>
+    </div>
+
+    <div class="seccion-card">
+      <h2>Productos más vendidos</h2>
+      <p class="desc">Ventas reales del período (no confundir con "más vistos" de la pestaña Actividad).</p>
+      <table>
+        <thead><tr><th>Producto</th><th style="text-align:right;">Cantidad vendida</th><th style="text-align:right;">Monto generado</th></tr></thead>
+        <tbody id="tablaProductos"></tbody>
+      </table>
+      <div class="estado-vacio hidden" id="vacioProductos">Sin ventas en este rango.</div>
+    </div>
+  </div>
+</main>
+
+<script>
+const BASE_URL = window.location.origin;
+// Modo "embed": ver el comentario equivalente en admin-organizaciones.html.
+const EMBED = new URLSearchParams(window.location.search).get('embed') === '1';
+if (!EMBED) { window.location.replace('admin-panel.html?tab=ventas'); }
+if (EMBED) { const h = document.querySelector('header'); if (h) h.style.display = 'none'; }
+function volverAlPanel() {
+  if (EMBED) { parent.postMessage({ type: 'huayca-logout' }, '*'); return; }
+  window.location.href = 'admin.html';
+}
+const token = localStorage.getItem('huayca_admin_token') || '';
+if (!token) volverAlPanel();
+
+let rangoActual = '30d';
+
+function cerrarSesion() {
+  localStorage.removeItem('huayca_admin_token');
+  volverAlPanel();
+}
+
+function authHeaders() {
+  return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
+}
+
+async function apiFetch(path, options = {}) {
+  const res = await fetch(BASE_URL + path, { ...options, headers: { ...authHeaders(), ...(options.headers || {}) } });
+  if (res.status === 401 || res.status === 403) {
+    cerrarSesion();
+    throw new Error('Sesión expirada, inicia sesión de nuevo');
+  }
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Error en la petición');
+  return data;
+}
+
+function mostrarError(msg) {
+  const banner = document.getElementById('errorBanner');
+  banner.textContent = msg;
+  banner.classList.remove('hidden');
+  setTimeout(() => banner.classList.add('hidden'), 5000);
+}
+
+function formatoCLP(n) { return '$' + Number(n || 0).toLocaleString('es-CL'); }
+
+// El rango se calcula acá (cliente) y se manda como desde/hasta en ISO,
+// igual que en admin-actividad.html — "personalizado" usa tal cual lo que
+// haya en los inputs de fecha.
+function calcularRango(rango) {
+  if (rango === 'personalizado') {
+    const dRaw = document.getElementById('fDesde').value;
+    const hRaw = document.getElementById('fHasta').value;
+    const hasta = hRaw ? new Date(hRaw + 'T23:59:59') : new Date();
+    const desde = dRaw ? new Date(dRaw + 'T00:00:00') : new Date(hasta.getTime() - 30 * 24 * 60 * 60 * 1000);
+    return { desde: desde.toISOString(), hasta: hasta.toISOString() };
+  }
+  const hasta = new Date();
+  let desde;
+  if (rango === 'hoy') {
+    desde = new Date(hasta.getFullYear(), hasta.getMonth(), hasta.getDate());
+  } else if (rango === '7d') {
+    desde = new Date(hasta.getTime() - 7 * 24 * 60 * 60 * 1000);
+  } else {
+    desde = new Date(hasta.getTime() - 30 * 24 * 60 * 60 * 1000);
+  }
+  return { desde: desde.toISOString(), hasta: hasta.toISOString() };
+}
+
+function cambiarRango(rango) {
+  rangoActual = rango;
+  document.querySelectorAll('.rango-tab').forEach((b) => b.classList.toggle('activo', b.dataset.rango === rango));
+  if (rango !== 'personalizado') {
+    // Refleja el preset en los inputs de fecha (solo visual, por si quiere
+    // partir de ahí para afinar a mano).
+    const { desde, hasta } = calcularRango(rango);
+    document.getElementById('fDesde').value = desde.slice(0, 10);
+    document.getElementById('fHasta').value = hasta.slice(0, 10);
+    cargar();
+  }
+}
+
+async function poblarSelectsFiltro() {
+  try {
+    const [orgs, provs] = await Promise.all([
+      apiFetch('/api/admin/organizaciones?estado=aprobada'),
+      apiFetch('/api/admin/proveedores')
+    ]);
+    const selOrg = document.getElementById('fOrganizacion');
+    (Array.isArray(orgs) ? orgs : []).forEach((o) => {
+      selOrg.insertAdjacentHTML('beforeend', `<option value="${o.id}">${o.nombre}</option>`);
+    });
+    const selProv = document.getElementById('fProveedor');
+    (Array.isArray(provs) ? provs : []).forEach((p) => {
+      selProv.insertAdjacentHTML('beforeend', `<option value="${p.id}">${p.nombre}</option>`);
+    });
+  } catch (e) {
+    // Selects quedan solo con "Todos/Todas" — no bloquea el resto.
+  }
+}
+
+function armarQuery() {
+  const { desde, hasta } = calcularRango(rangoActual);
+  const params = new URLSearchParams({ desde, hasta });
+  const proveedorId = document.getElementById('fProveedor').value;
+  const organizacionId = document.getElementById('fOrganizacion').value;
+  if (proveedorId) params.set('proveedor_id', proveedorId);
+  if (organizacionId) params.set('organizacion_id', organizacionId);
+  return params;
+}
+
+async function cargar() {
+  try {
+    const data = await apiFetch('/api/admin/reportes/resumen?' + armarQuery().toString());
+    render(data);
+    document.getElementById('estadoCarga').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+  } catch (e) {
+    document.getElementById('estadoCarga').textContent = 'Error al cargar: ' + e.message;
+  }
+}
+
+function render(data) {
+  const r = data.resumen || {};
+  document.getElementById('valVendido').textContent = formatoCLP(r.total_vendido);
+  document.getElementById('valCantidad').textContent = r.cantidad_pedidos || 0;
+  document.getElementById('valProveedores').textContent = formatoCLP(r.total_pagado_proveedores);
+  document.getElementById('valHuayca').textContent = formatoCLP(r.total_retenido_huayca);
+  document.getElementById('valComisionTotal').textContent = formatoCLP(r.total_comision_organizaciones);
+  document.getElementById('valComisionPagada').textContent = formatoCLP(r.comision_organizaciones_pagada);
+  document.getElementById('valComisionPendiente').textContent = formatoCLP(r.comision_organizaciones_pendiente);
+
+  const orgs = data.ranking_organizaciones || [];
+  document.getElementById('tablaOrganizaciones').innerHTML = orgs.map((o) => `
+    <tr><td>${o.nombre}</td><td class="num">${o.cantidad_ventas}</td><td class="num">${formatoCLP(o.comision_generada)}</td></tr>
+  `).join('');
+  document.getElementById('vacioOrganizaciones').classList.toggle('hidden', orgs.length > 0);
+
+  const prods = data.ranking_productos || [];
+  document.getElementById('tablaProductos').innerHTML = prods.map((p) => `
+    <tr><td>${p.nombre}</td><td class="num">${p.cantidad_vendida}</td><td class="num">${formatoCLP(p.monto_generado)}</td></tr>
+  `).join('');
+  document.getElementById('vacioProductos').classList.toggle('hidden', prods.length > 0);
+}
+
+// El CSV se descarga con un fetch autenticado (no un <a href> plano, porque
+// la ruta requiere el Bearer token) y se dispara guardando el blob a mano.
+async function descargarCsv() {
+  try {
+    const res = await fetch(BASE_URL + '/api/admin/reportes/pedidos.csv?' + armarQuery().toString(), { headers: authHeaders() });
+    if (res.status === 401 || res.status === 403) { cerrarSesion(); return; }
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Error al generar el CSV');
+    }
+    const blob = await res.blob();
+    const disposicion = res.headers.get('Content-Disposition') || '';
+    const match = disposicion.match(/filename="([^"]+)"/);
+    const nombreArchivo = match ? match[1] : 'huayca-pedidos.csv';
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nombreArchivo;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  } catch (e) {
+    mostrarError(e.message);
+  }
+}
+
+document.querySelector('.rango-tab[data-rango="30d"]').classList.add('activo');
+{
+  const { desde, hasta } = calcularRango('30d');
+  document.getElementById('fDesde').value = desde.slice(0, 10);
+  document.getElementById('fHasta').value = hasta.slice(0, 10);
+}
+poblarSelectsFiltro();
+cargar();
+</script>
+
+</body>
+</html>
