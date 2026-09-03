@@ -314,12 +314,20 @@ router.get('/productos', async (req, res) => {
   }
 });
 
+// Normaliza lo que venga en regiones_disponibles (del panel de admin) al
+// shape que se guarda: JSON string de un array no vacío, o NULL directo
+// si viene vacío/no viene — así "sin restricción" queda representado de
+// una sola forma (NULL), nunca como '[]' guardado en la columna.
+function normalizarRegionesDisponibles(regiones) {
+  return Array.isArray(regiones) && regiones.length ? JSON.stringify(regiones) : null;
+}
+
 router.post('/productos', async (req, res) => {
   try {
     const {
       proveedor_id, categoria_id, nombre, descripcion, imagen_principal, imagenes,
       precio_proveedor, comision_afiliado, comision_huayca, precio_normal,
-      stock, garantia_meses, estado
+      stock, garantia_meses, estado, regiones_disponibles
     } = req.body;
 
     if (!proveedor_id || !nombre || precio_proveedor == null) {
@@ -333,12 +341,14 @@ router.post('/productos', async (req, res) => {
     const [result] = await db.query(
       `INSERT INTO productos
        (proveedor_id, categoria_id, nombre, slug, descripcion, imagen_principal, imagenes,
-        precio_proveedor, comision_afiliado, comision_huayca, precio_normal, stock, garantia_meses, estado)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        precio_proveedor, comision_afiliado, comision_huayca, precio_normal, stock, garantia_meses, estado,
+        regiones_disponibles)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         proveedor_id, categoria_id || null, nombre, slug, descripcion || null, imagen_principal || null,
         JSON.stringify(imagenes || []), precio_proveedor, comision_afiliado || 0, comision_huayca || 0,
-        precio_normal || null, stock ?? 0, garantia_meses ?? 6, estado || 'borrador'
+        precio_normal || null, stock ?? 0, garantia_meses ?? 6, estado || 'borrador',
+        normalizarRegionesDisponibles(regiones_disponibles)
       ]
     );
     res.status(201).json({ id: result.insertId, slug });
@@ -353,9 +363,16 @@ router.put('/productos/:id', async (req, res) => {
     const {
       categoria_id, nombre, descripcion, imagen_principal, imagenes,
       precio_proveedor, comision_afiliado, comision_huayca, precio_normal,
-      stock, garantia_meses, estado
+      stock, garantia_meses, estado, regiones_disponibles
     } = req.body;
 
+    // regiones_disponibles NO usa COALESCE como el resto de los campos: el
+    // formulario del panel siempre manda el producto completo en cada
+    // guardado (no es un PATCH parcial), así que un array vacío/ausente
+    // acá significa de verdad "sacar la restricción", no "no tocar este
+    // campo" — con COALESCE, mandar NULL para limpiar la restricción
+    // habría quedado indistinguible de no mandar nada, y nunca se hubiera
+    // podido volver a "disponible en todo Chile" una vez restringido.
     const [result] = await db.query(
       `UPDATE productos SET
          categoria_id = COALESCE(?, categoria_id),
@@ -369,13 +386,15 @@ router.put('/productos/:id', async (req, res) => {
          precio_normal = COALESCE(?, precio_normal),
          stock = COALESCE(?, stock),
          garantia_meses = COALESCE(?, garantia_meses),
-         estado = COALESCE(?, estado)
+         estado = COALESCE(?, estado),
+         regiones_disponibles = ?
        WHERE id = ?`,
       [
         categoria_id ?? null, nombre || null, descripcion || null, imagen_principal || null,
         imagenes ? JSON.stringify(imagenes) : null,
         precio_proveedor ?? null, comision_afiliado ?? null, comision_huayca ?? null, precio_normal ?? null,
-        stock ?? null, garantia_meses ?? null, estado || null, req.params.id
+        stock ?? null, garantia_meses ?? null, estado || null,
+        normalizarRegionesDisponibles(regiones_disponibles), req.params.id
       ]
     );
     if (!result.affectedRows) return res.status(404).json({ error: 'Producto no encontrado' });

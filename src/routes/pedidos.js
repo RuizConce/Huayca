@@ -18,8 +18,24 @@ router.post('/', async (req, res) => {
   try {
     const { producto_id, cantidad = 1, cliente, organizacion_slug, direccion_envio } = req.body;
 
-    if (!producto_id || !cliente?.email || !cliente?.nombre) {
-      return res.status(400).json({ error: 'producto_id y datos del cliente son requeridos' });
+    // Validación de presencia — nunca hay que confiar solo en el checkout
+    // (public/checkout.html), que ya exige estos mismos campos con
+    // asteriscos y bloquea el botón de confirmar: alguien podría llamar
+    // esta API directo, sin pasar por el frontend. Se listan TODOS los
+    // campos que faltan de una, en vez de cortar en el primero, para que
+    // el mensaje de error sea útil de entrada.
+    const vacio = (v) => v === undefined || v === null || String(v).trim() === '';
+    const faltantes = [];
+    if (vacio(producto_id)) faltantes.push('producto_id');
+    if (vacio(cliente?.nombre)) faltantes.push('cliente.nombre');
+    if (vacio(cliente?.email)) faltantes.push('cliente.email');
+    if (vacio(cliente?.telefono)) faltantes.push('cliente.telefono');
+    if (vacio(direccion_envio?.calle)) faltantes.push('direccion_envio.calle');
+    if (vacio(direccion_envio?.numero)) faltantes.push('direccion_envio.numero');
+    if (vacio(direccion_envio?.region)) faltantes.push('direccion_envio.region');
+    if (vacio(direccion_envio?.comuna)) faltantes.push('direccion_envio.comuna');
+    if (faltantes.length) {
+      return res.status(400).json({ error: `Faltan campos obligatorios: ${faltantes.join(', ')}` });
     }
 
     await conn.beginTransaction();
@@ -37,6 +53,23 @@ router.post('/', async (req, res) => {
     if (producto.stock < cantidad) {
       await conn.rollback();
       return res.status(409).json({ error: 'Stock insuficiente' });
+    }
+
+    // 1.5. Restricción de región (algunos productos, ej. perfumes, solo se
+    // despachan a ciertas regiones). regiones_disponibles NULL o vacío =
+    // sin restricción, disponible en todo Chile. mysql2 normalmente ya
+    // devuelve las columnas JSON parseadas, pero se maneja también el
+    // caso string por las dudas (mismo patrón defensivo que se usa en
+    // otros lugares del código con columnas JSON).
+    let regionesPermitidas = producto.regiones_disponibles;
+    if (typeof regionesPermitidas === 'string') {
+      try { regionesPermitidas = JSON.parse(regionesPermitidas); } catch (e) { regionesPermitidas = null; }
+    }
+    if (Array.isArray(regionesPermitidas) && regionesPermitidas.length && !regionesPermitidas.includes(direccion_envio.region)) {
+      await conn.rollback();
+      return res.status(400).json({
+        error: `Este producto no está disponible para envío a ${direccion_envio.region}. Regiones disponibles: ${regionesPermitidas.join(', ')}.`
+      });
     }
 
     // 2. Resolver organización a partir del link (si existe)

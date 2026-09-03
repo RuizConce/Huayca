@@ -182,6 +182,14 @@
       <option value="pausado">Pausado</option>
       <option value="agotado">Agotado</option>
     </select>
+    <label style="display:flex; align-items:center; gap:8px; margin-top:16px;">
+      <input type="checkbox" id="productoTieneRestriccion" style="width:auto;" onchange="toggleRestriccionRegion()">
+      ¿Este producto tiene restricción de región?
+    </label>
+    <div id="bloqueRestriccionRegion" class="hidden" style="margin-top:8px; padding:10px; background:#f4f5f2; border-radius:8px;">
+      <small style="display:block; margin-bottom:8px; color:#888;">Elegí una o varias regiones donde SÍ se puede vender/despachar este producto. Sin ninguna marcada, queda disponible en todo Chile (igual que sin restricción).</small>
+      <div id="checksRegiones" style="display:grid; grid-template-columns:1fr 1fr; gap:5px; max-height:220px; overflow-y:auto;"></div>
+    </div>
     <div class="precio-final-preview">
       Precio final al cliente: <b id="precioFinalPreview">$0</b>
     </div>
@@ -192,6 +200,7 @@
   </div>
 </div>
 
+<script src="js/chile-regiones-comunas.js"></script>
 <script>
 const BASE_URL = window.location.origin; // el panel vive en el mismo dominio que la API
 let token = localStorage.getItem('huayca_admin_token') || '';
@@ -383,6 +392,45 @@ function renderProductos(productos) {
 }
 
 // ---------- Productos ----------
+// ---------- Restricción de región (algunos productos, ej. perfumes, solo
+// se despachan a ciertas regiones) ----------
+// El grid de checkboxes se arma una sola vez (CHILE_REGIONES no cambia en
+// runtime) y se reusa entre abrir/editar productos distintos.
+let checksRegionesArmado = false;
+function armarChecksRegiones() {
+  if (checksRegionesArmado) return;
+  const cont = document.getElementById('checksRegiones');
+  cont.innerHTML = CHILE_REGIONES.map((r, i) => `
+    <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; font-weight:400;">
+      <input type="checkbox" class="check-region" value="${r.region}" style="width:auto;">
+      ${r.region.replace(/^Región (de |del |Metropolitana de )?/, '')}
+    </label>
+  `).join('');
+  checksRegionesArmado = true;
+}
+
+function toggleRestriccionRegion() {
+  const activo = document.getElementById('productoTieneRestriccion').checked;
+  document.getElementById('bloqueRestriccionRegion').classList.toggle('hidden', !activo);
+  if (!activo) {
+    document.querySelectorAll('.check-region').forEach((c) => c.checked = false);
+  }
+}
+
+function marcarRegiones(regiones) {
+  armarChecksRegiones();
+  const set = new Set(regiones || []);
+  document.querySelectorAll('.check-region').forEach((c) => c.checked = set.has(c.value));
+  const tieneRestriccion = set.size > 0;
+  document.getElementById('productoTieneRestriccion').checked = tieneRestriccion;
+  document.getElementById('bloqueRestriccionRegion').classList.toggle('hidden', !tieneRestriccion);
+}
+
+function leerRegionesSeleccionadas() {
+  if (!document.getElementById('productoTieneRestriccion').checked) return [];
+  return [...document.querySelectorAll('.check-region:checked')].map((c) => c.value);
+}
+
 function abrirModalProducto() {
   document.getElementById('modalProductoTitulo').textContent = 'Nuevo producto';
   document.getElementById('productoId').value = '';
@@ -391,6 +439,7 @@ function abrirModalProducto() {
   document.getElementById('productoEstado').value = 'borrador';
   actualizarPreview();
   actualizarPreviewImagen('productoImagen', 'previewProductoImagen', 'dimProductoImagen');
+  marcarRegiones([]);
   document.getElementById('modalProducto').classList.remove('hidden');
 }
 
@@ -408,6 +457,7 @@ function editarProducto(p) {
   document.getElementById('productoEstado').value = p.estado || 'borrador';
   actualizarPreview();
   actualizarPreviewImagen('productoImagen', 'previewProductoImagen', 'dimProductoImagen');
+  marcarRegiones(p.regiones_disponibles);
   document.getElementById('modalProducto').classList.remove('hidden');
 }
 
@@ -487,7 +537,8 @@ async function guardarProducto() {
     comision_huayca: Number(document.getElementById('productoComisionHuayca').value) || 0,
     precio_normal: document.getElementById('productoPrecioNormal').value ? Number(document.getElementById('productoPrecioNormal').value) : null,
     stock: Number(document.getElementById('productoStock').value) || 0,
-    estado: document.getElementById('productoEstado').value
+    estado: document.getElementById('productoEstado').value,
+    regiones_disponibles: leerRegionesSeleccionadas()
   };
   if (!payload.nombre) { mostrarError('El nombre del producto es obligatorio'); return; }
   try {

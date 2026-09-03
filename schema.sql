@@ -59,6 +59,13 @@ CREATE TABLE productos (
   stock INT DEFAULT 0,
   garantia_meses INT DEFAULT 6,
   estado ENUM('borrador','activo','agotado','pausado') DEFAULT 'borrador',
+  -- Array de nombres de región (ej. ["Región Metropolitana de Santiago"],
+  -- mismos strings que public/js/chile-regiones-comunas.js) donde este
+  -- producto puede despacharse. NULL o array vacío = sin restricción,
+  -- disponible en todo Chile (comportamiento por defecto para todo lo que
+  -- ya existía antes de este campo). Ver POST /api/pedidos para la
+  -- validación real al comprar.
+  regiones_disponibles JSON,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (proveedor_id) REFERENCES proveedores(id),

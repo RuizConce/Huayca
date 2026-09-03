@@ -156,6 +156,9 @@ async function cargarProducto() {
             <span><b>Stock:</b> ${p.stock > 0 ? p.stock + ' disponibles' : 'Agotado'}</span>
             <span><b>Proveedor:</b> ${p.proveedor_nombre || '—'}</span>
           </div>
+          ${Array.isArray(p.regiones_disponibles) && p.regiones_disponibles.length
+            ? `<div class="aviso-region">📍 <b>Disponible solo para:</b> ${p.regiones_disponibles.join(', ')}</div>`
+            : ''}
           <a href="${p.stock > 0 ? linkCheckout : '#'}" id="btnComprarAhora" class="btn btn-primary btn-block" ${p.stock > 0 ? '' : 'style="pointer-events:none;opacity:.5;"'}>
             ${p.stock > 0 ? 'Comprar ahora →' : 'Sin stock'}
           </a>

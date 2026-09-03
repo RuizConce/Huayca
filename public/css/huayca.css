@@ -420,6 +420,7 @@ footer.site ul a:hover { color: #fff; }
 .card-form .sub { color: var(--text-muted); font-size: 13.5px; margin-bottom: 22px; }
 .campo { margin-bottom: 16px; }
 .campo label { display: block; font-size: 13px; font-weight: 600; color: var(--navy); margin-bottom: 6px; }
+.requerido { color: var(--orange); font-weight: 700; }
 .campo input, .campo select, .campo textarea {
   width: 100%; padding: 11px 13px; border: 1.5px solid var(--border); border-radius: var(--radius-sm);
   font-size: 14px; color: var(--text); outline: none; background: #fff;
@@ -470,6 +471,8 @@ footer.site ul a:hover { color: #fff; }
 .ficha-precios .normal { font-size: 15px; color: var(--text-soft); text-decoration: line-through; }
 .ficha-meta { display: flex; gap: 18px; margin: 18px 0 24px; font-size: 13px; color: var(--text-muted); flex-wrap: wrap; }
 .ficha-meta b { color: var(--navy); }
+.aviso-region { background: var(--orange-light); color: #8a5417; font-size: 12.5px; padding: 9px 12px; border-radius: var(--radius-sm); margin: 10px 0 4px; }
+.aviso-region b { color: inherit; }
 
 /* ---------- Checkout / resumen ---------- */
 .checkout-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 30px; padding: 10px 0 60px; align-items: start; }

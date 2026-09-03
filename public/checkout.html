@@ -60,11 +60,17 @@
   </div>
 </footer>
 
+<script src="js/chile-regiones-comunas.js"></script>
 <script src="js/huayca.js"></script>
 <script>
 let productoActual = null;
 let cantidadActual = 1;
 let organizacionIdActual = null; // resuelta una vez en cargarCheckout, reusada en enviarPedido
+
+// Campos que public/checkout.html exige completos antes de dejar
+// confirmar — ver también la MISMA validación (nunca hay que confiar solo
+// en el frontend) en POST /api/pedidos, src/routes/pedidos.js.
+const CAMPOS_REQUERIDOS = ['cNombre', 'cEmail', 'cTelefono', 'dCalle', 'dNumero', 'dRegion', 'dComuna'];
 
 function renderResumen() {
   const p = productoActual;
@@ -116,26 +122,95 @@ function renderFormulario() {
   return `
     <div class="card-form" style="margin:0;">
       <h2>Tus datos</h2>
-      <p class="sub">Los necesitamos para coordinar el despacho y avisarte del estado de tu pedido.</p>
+      <p class="sub">Los necesitamos para coordinar el despacho y avisarte del estado de tu pedido. Los campos con <span class="requerido">*</span> son obligatorios.</p>
       <form id="formCheckout">
-        <div class="campo"><label>Nombre completo</label><input id="cNombre" required></div>
+        <div class="campo"><label>Nombre completo <span class="requerido">*</span></label><input id="cNombre" required></div>
         <div class="campo-fila">
-          <div class="campo"><label>Email</label><input id="cEmail" type="email" required></div>
-          <div class="campo"><label>Teléfono</label><input id="cTelefono" type="tel"></div>
+          <div class="campo"><label>Email <span class="requerido">*</span></label><input id="cEmail" type="email" required></div>
+          <div class="campo"><label>Teléfono <span class="requerido">*</span></label><input id="cTelefono" type="tel" required></div>
         </div>
         <div class="campo-fila">
-          <div class="campo"><label>Calle</label><input id="dCalle"></div>
-          <div class="campo"><label>Número</label><input id="dNumero"></div>
+          <div class="campo"><label>Calle <span class="requerido">*</span></label><input id="dCalle" required></div>
+          <div class="campo"><label>Número <span class="requerido">*</span></label><input id="dNumero" required></div>
         </div>
         <div class="campo-fila">
-          <div class="campo"><label>Comuna</label><input id="dComuna"></div>
-          <div class="campo"><label>Región</label><input id="dRegion"></div>
+          <div class="campo">
+            <label>Región <span class="requerido">*</span></label>
+            <select id="dRegion" required><option value="">Selecciona tu región</option></select>
+          </div>
+          <div class="campo">
+            <label>Comuna <span class="requerido">*</span></label>
+            <select id="dComuna" required disabled><option value="">Primero elegí tu región</option></select>
+          </div>
         </div>
-        <button type="submit" class="btn btn-primary btn-block" id="btnConfirmar">Confirmar pedido</button>
+        <div class="campo"><label>Depto / referencia (opcional)</label><input id="dReferencia" placeholder="Ej: depto 4B, casa con reja verde"></div>
+        <div id="avisoRegion" class="form-msg error hidden"></div>
+        <button type="submit" class="btn btn-primary btn-block" id="btnConfirmar" disabled>Confirmar pedido</button>
         <div id="checkoutMsg"></div>
       </form>
     </div>
   `;
+}
+
+// ---------- Región/comuna en cascada ----------
+function poblarRegiones() {
+  const select = document.getElementById('dRegion');
+  select.innerHTML = '<option value="">Selecciona tu región</option>' +
+    CHILE_REGIONES.map((r) => `<option value="${r.region}">${r.region}</option>`).join('');
+}
+
+function onCambiaRegion() {
+  const regionElegida = document.getElementById('dRegion').value;
+  const selectComuna = document.getElementById('dComuna');
+  const entrada = CHILE_REGIONES.find((r) => r.region === regionElegida);
+  if (!entrada) {
+    selectComuna.innerHTML = '<option value="">Primero elegí tu región</option>';
+    selectComuna.disabled = true;
+  } else {
+    selectComuna.innerHTML = '<option value="">Selecciona tu comuna</option>' +
+      entrada.comunas.map((c) => `<option value="${c}">${c}</option>`).join('');
+    selectComuna.disabled = false;
+  }
+  validarFormulario();
+}
+
+// ---------- Restricción de región del producto (algunos productos, ej.
+// perfumes, solo se despachan a ciertas regiones) ----------
+function regionesPermitidasProducto() {
+  const r = productoActual.regiones_disponibles;
+  return Array.isArray(r) && r.length ? r : null; // null = sin restricción
+}
+
+function validarRegionProducto() {
+  const permitidas = regionesPermitidasProducto();
+  const aviso = document.getElementById('avisoRegion');
+  if (!permitidas) { aviso.classList.add('hidden'); return true; }
+  const regionElegida = document.getElementById('dRegion').value;
+  if (!regionElegida) { aviso.classList.add('hidden'); return false; } // sin elegir todavía: ni error ni ok
+  if (permitidas.includes(regionElegida)) { aviso.classList.add('hidden'); return true; }
+  aviso.textContent = `Este producto no está disponible para envío a ${regionElegida}. Regiones disponibles: ${permitidas.join(', ')}.`;
+  aviso.classList.remove('hidden');
+  return false;
+}
+
+// ---------- Validación general + bloqueo del botón ----------
+function validarFormulario() {
+  const todosCompletos = CAMPOS_REQUERIDOS.every((id) => document.getElementById(id).value.trim());
+  const regionOk = validarRegionProducto();
+  document.getElementById('btnConfirmar').disabled = !(todosCompletos && regionOk);
+}
+
+function wireFormulario() {
+  poblarRegiones();
+  // dRegion tiene su propio handler (onCambiaRegion, que repuebla comuna y
+  // al final también llama validarFormulario) — se excluye del loop
+  // genérico de abajo para no engancharle un segundo listener redundante.
+  document.getElementById('dRegion').addEventListener('change', onCambiaRegion);
+  CAMPOS_REQUERIDOS.filter((id) => id !== 'dRegion').forEach((id) => {
+    document.getElementById(id).addEventListener('input', validarFormulario);
+    document.getElementById(id).addEventListener('change', validarFormulario);
+  });
+  validarFormulario(); // arranca con el botón deshabilitado (formulario vacío)
 }
 
 async function cargarCheckout() {
@@ -154,6 +229,7 @@ async function cargarCheckout() {
 
     cont.innerHTML = renderFormulario() + renderResumen();
     wireCantidad();
+    wireFormulario();
 
     document.getElementById('formCheckout').addEventListener('submit', enviarPedido);
 
@@ -173,10 +249,13 @@ async function enviarPedido(e) {
   const btn = document.getElementById('btnConfirmar');
   msg.innerHTML = '';
 
-  const nombre = document.getElementById('cNombre').value.trim();
-  const email = document.getElementById('cEmail').value.trim();
-  if (!nombre || !email) {
-    msg.innerHTML = '<div class="form-msg error">Nombre y email son obligatorios.</div>';
+  // Defensivo: el botón ya está deshabilitado mientras falte algo (ver
+  // validarFormulario), pero se revalida acá también antes de mandar
+  // nada — mismo principio de "nunca confiar solo en el estado visual
+  // del frontend" que ya se aplica en el backend.
+  validarFormulario();
+  if (btn.disabled) {
+    msg.innerHTML = '<div class="form-msg error">Completá todos los campos obligatorios antes de confirmar.</div>';
     return;
   }
 
@@ -185,15 +264,16 @@ async function enviarPedido(e) {
     producto_id: productoActual.id,
     cantidad: cantidadActual,
     cliente: {
-      nombre,
-      email,
-      telefono: document.getElementById('cTelefono').value.trim() || undefined
+      nombre: document.getElementById('cNombre').value.trim(),
+      email: document.getElementById('cEmail').value.trim(),
+      telefono: document.getElementById('cTelefono').value.trim()
     },
     direccion_envio: {
       calle: document.getElementById('dCalle').value.trim(),
       numero: document.getElementById('dNumero').value.trim(),
       comuna: document.getElementById('dComuna').value.trim(),
-      region: document.getElementById('dRegion').value.trim()
+      region: document.getElementById('dRegion').value.trim(),
+      depto: document.getElementById('dReferencia').value.trim() || undefined
     }
   };
   if (orgSlug) payload.organizacion_slug = orgSlug;
