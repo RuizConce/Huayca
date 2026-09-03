@@ -23,6 +23,11 @@
     border-radius: 20px; font-size: 13px; font-weight: 600; cursor: pointer;
   }
   .rango-tab.activo { background: #0d2b4e; border-color: #0d2b4e; color: white; }
+  .subtab-btn {
+    background: white; border: 1px solid #e4e2db; color: #555; padding: 9px 18px;
+    border-radius: 20px; font-size: 13.5px; font-weight: 700; cursor: pointer;
+  }
+  .subtab-btn.activo { background: #e8801e; border-color: #e8801e; color: white; }
   .filtros-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; align-items: end; }
   .filtros-grid label { display: block; font-size: 11.5px; color: #888; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.02em; }
   .filtros-grid input, .filtros-grid select { width: 100%; padding: 8px 9px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; }
@@ -75,6 +80,12 @@
   <div id="app" class="hidden">
     <div id="errorBanner" class="hidden"></div>
 
+    <div class="rango-tabs" style="margin-bottom:16px;">
+      <button type="button" class="subtab-btn" id="subtabBtnResumen" onclick="cambiarSubtab('resumen')">Resumen</button>
+      <button type="button" class="subtab-btn" id="subtabBtnDesglose" onclick="cambiarSubtab('desglose')">Desglose de productos</button>
+    </div>
+
+    <div id="subtabResumen">
     <div class="filtros-card">
       <div class="rango-tabs" id="rangoTabs">
         <button type="button" class="rango-tab" data-rango="hoy" onclick="cambiarRango('hoy')">Hoy</button>
@@ -144,6 +155,32 @@
         <tbody id="tablaProductos"></tbody>
       </table>
       <div class="estado-vacio hidden" id="vacioProductos">Sin ventas en este rango.</div>
+    </div>
+    </div>
+
+    <div id="subtabDesglose" class="hidden">
+      <div class="seccion-card">
+        <h2>Desglose de precio — catálogo activo</h2>
+        <p class="desc">Todos los productos activos con la composición completa de su precio final, de un vistazo (no hace falta entrar producto por producto en Marcas y Productos).</p>
+        <div style="overflow-x:auto;">
+          <table style="min-width:920px;">
+            <thead>
+              <tr>
+                <th>Producto</th><th>Marca</th>
+                <th style="text-align:right;">Proveedor</th>
+                <th style="text-align:right;">Com. organización</th>
+                <th style="text-align:right;">Com. Huayca</th>
+                <th style="text-align:right;">Com. Eliss</th>
+                <th style="text-align:right;">Impuesto</th>
+                <th style="text-align:right;">Precio final</th>
+                <th style="text-align:right;">Stock</th>
+              </tr>
+            </thead>
+            <tbody id="tablaDesglose"></tbody>
+          </table>
+        </div>
+        <div class="estado-vacio hidden" id="vacioDesglose">No hay productos activos todavía.</div>
+      </div>
     </div>
   </div>
 </main>
@@ -318,6 +355,51 @@ async function descargarCsv() {
   }
 }
 
+// ---------- Sub-tab: Resumen / Desglose de productos ----------
+// El desglose se pide recién la primera vez que se entra a esa sub-pestaña
+// (lazy load, mismo criterio que el shell del panel usa para las pestañas
+// principales) — no tiene filtro de fecha (es "estado actual del
+// catálogo", no algo que varíe por rango), así que no hace falta recargarlo
+// cada vez que se cambia de sub-pestaña.
+let desgloseCargado = false;
+
+function cambiarSubtab(subtab) {
+  document.getElementById('subtabBtnResumen').classList.toggle('activo', subtab === 'resumen');
+  document.getElementById('subtabBtnDesglose').classList.toggle('activo', subtab === 'desglose');
+  document.getElementById('subtabResumen').classList.toggle('hidden', subtab !== 'resumen');
+  document.getElementById('subtabDesglose').classList.toggle('hidden', subtab !== 'desglose');
+  if (subtab === 'desglose' && !desgloseCargado) cargarDesglose();
+}
+
+async function cargarDesglose() {
+  try {
+    const productos = await apiFetch('/api/admin/productos/desglose');
+    desgloseCargado = true;
+    const tbody = document.getElementById('tablaDesglose');
+    if (!productos.length) {
+      tbody.innerHTML = '';
+      document.getElementById('vacioDesglose').classList.remove('hidden');
+      return;
+    }
+    document.getElementById('vacioDesglose').classList.add('hidden');
+    tbody.innerHTML = productos.map((p) => `
+      <tr>
+        <td>${p.nombre}</td>
+        <td>${p.proveedor_nombre}</td>
+        <td class="num">${formatoCLP(p.precio_proveedor)}</td>
+        <td class="num">${formatoCLP(p.comision_afiliado)}</td>
+        <td class="num">${formatoCLP(p.comision_huayca)}</td>
+        <td class="num">${formatoCLP(p.comision_eliss)}</td>
+        <td class="num">${p.impuesto_incluido ? '<span style="color:#999;font-weight:400;">Incluido</span>' : formatoCLP(p.monto_impuesto)}</td>
+        <td class="num">${formatoCLP(p.precio_final)}</td>
+        <td class="num">${p.stock}</td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    mostrarError(e.message);
+  }
+}
+
 document.querySelector('.rango-tab[data-rango="30d"]').classList.add('activo');
 {
   const { desde, hasta } = calcularRango('30d');
@@ -326,6 +408,7 @@ document.querySelector('.rango-tab[data-rango="30d"]').classList.add('activo');
 }
 poblarSelectsFiltro();
 cargar();
+cambiarSubtab('resumen');
 </script>
 
 </body>

@@ -100,22 +100,30 @@ router.post('/', async (req, res) => {
       clienteId = resultCliente.insertId;
     }
 
-    // 4. Congelar montos del producto al momento de la compra
+    // 4. Congelar montos del producto al momento de la compra (los 5
+    // componentes del desglose de precio, ver schema.sql/productos —
+    // monto_impuesto solo se congela si el producto lo cobra aparte;
+    // si impuesto_incluido es true, ya está adentro de precio_proveedor
+    // y acá queda en 0 para no sumarlo dos veces).
     const montoProveedor = producto.precio_proveedor * cantidad;
     const montoComisionAfiliado = producto.comision_afiliado * cantidad;
     const montoComisionHuayca = producto.comision_huayca * cantidad;
-    const montoTotal = montoProveedor + montoComisionAfiliado + montoComisionHuayca;
+    const montoComisionEliss = producto.comision_eliss * cantidad;
+    const montoImpuesto = producto.impuesto_incluido ? 0 : producto.monto_impuesto * cantidad;
+    const montoTotal = montoProveedor + montoComisionAfiliado + montoComisionHuayca + montoComisionEliss + montoImpuesto;
 
     // 5. Crear pedido
     const [resultPedido] = await conn.query(
       `INSERT INTO pedidos
        (codigo, cliente_id, producto_id, proveedor_id, organizacion_id,
-        monto_proveedor, monto_comision_afiliado, monto_comision_huayca, monto_total,
+        monto_proveedor, monto_comision_afiliado, monto_comision_huayca, monto_comision_eliss,
+        monto_impuesto, monto_total,
         cantidad, direccion_envio, estado_liquidacion)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         'TEMP', clienteId, producto.id, producto.proveedor_id, organizacionId,
-        montoProveedor, montoComisionAfiliado, montoComisionHuayca, montoTotal,
+        montoProveedor, montoComisionAfiliado, montoComisionHuayca, montoComisionEliss,
+        montoImpuesto, montoTotal,
         cantidad, JSON.stringify(direccion_envio || null),
         organizacionId ? 'pendiente' : 'no_aplica'
       ]

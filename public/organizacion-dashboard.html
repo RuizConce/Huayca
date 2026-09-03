@@ -66,9 +66,17 @@ async function cargarDashboard() {
 
   const cont = document.getElementById('vistaDash');
   try {
-    const data = await Huayca.apiFetch('/api/organizaciones/mi-dashboard', {
-      headers: { Authorization: 'Bearer ' + Huayca.getTokenOrg() }
-    });
+    const [data, catalogo] = await Promise.all([
+      Huayca.apiFetch('/api/organizaciones/mi-dashboard', {
+        headers: { Authorization: 'Bearer ' + Huayca.getTokenOrg() }
+      }),
+      // El catálogo-con-comisiones es informativo (para decidir qué
+      // promocionar) y no debería tumbar el dashboard si falla — se cae a
+      // un array vacío en vez de dejar sin cargar el resto de la página.
+      Huayca.apiFetch('/api/organizaciones/catalogo-comisiones', {
+        headers: { Authorization: 'Bearer ' + Huayca.getTokenOrg() }
+      }).catch(() => [])
+    ]);
 
     const link = `${Huayca.BASE_URL}/catalogo.html?org=${encodeURIComponent(sesion?.slug || '')}`;
     const filas = (data.ultimas_comisiones || []).map((c) => `
@@ -79,6 +87,30 @@ async function cargarDashboard() {
         <td>${Huayca.formatoFecha(c.created_at)}</td>
       </tr>
     `).join('');
+
+    // El catálogo ya viene ordenado de mayor a menor comisión desde el
+    // backend (GET /api/organizaciones/catalogo-comisiones) — acá solo se
+    // arma cada fila. El link de cada producto usa el mismo patrón
+    // ?org=slug que el link general de arriba, pero apuntando a la ficha
+    // puntual del producto en vez del catálogo completo.
+    const filasCatalogo = (catalogo || []).map((p) => {
+      const linkProducto = `${Huayca.BASE_URL}/producto.html?slug=${encodeURIComponent(p.slug)}&org=${encodeURIComponent(sesion?.slug || '')}`;
+      return `
+      <tr>
+        <td>
+          <div style="display:flex; align-items:center; gap:10px;">
+            ${p.imagen_principal
+              ? `<img src="${p.imagen_principal}" alt="${p.nombre}" style="width:40px;height:40px;border-radius:8px;object-fit:cover;flex-shrink:0;">`
+              : `<div style="width:40px;height:40px;border-radius:8px;background:var(--bg);flex-shrink:0;"></div>`}
+            <span>${p.nombre}</span>
+          </div>
+        </td>
+        <td>${Huayca.formatoCLP(p.precio_final)}</td>
+        <td><b style="color:var(--green-dark); font-size:15px;">${Huayca.formatoCLP(p.tu_comision)}</b></td>
+        <td><button type="button" class="btn btn-sm btn-navy btn-copiar-producto" data-link="${linkProducto}">Copiar mi link</button></td>
+      </tr>
+    `;
+    }).join('');
 
     cont.innerHTML = `
       <div class="stat-grid">
@@ -103,6 +135,17 @@ async function cargarDashboard() {
           </table>
         </div>
       ` : '<div class="estado-vacio">Todavía no tienes ventas registradas. ¡Comparte tu link!</div>'}
+
+      <h3 style="color:var(--navy); font-size:16px; margin:26px 0 4px;">Productos y tus comisiones</h3>
+      <p style="color:var(--text-soft); font-size:13px; margin:0 0 10px;">Catálogo completo, ordenado por lo que más te conviene promocionar. Por privacidad, acá solo se muestra el precio final y tu comisión — el resto del desglose es interno de Huayca.</p>
+      ${filasCatalogo ? `
+        <div style="overflow-x:auto;">
+          <table class="tabla-comisiones">
+            <thead><tr><th>Producto</th><th>Precio final</th><th>Tu comisión</th><th></th></tr></thead>
+            <tbody>${filasCatalogo}</tbody>
+          </table>
+        </div>
+      ` : '<div class="estado-vacio">Todavía no hay productos activos en el catálogo.</div>'}
     `;
 
     document.getElementById('btnCopiarLink').addEventListener('click', async () => {
@@ -113,6 +156,23 @@ async function cargarDashboard() {
         setTimeout(() => { btn.textContent = 'Copiar link'; }, 1800);
       } catch (e) {
         btn.textContent = 'No se pudo copiar';
+      }
+    });
+
+    // Un solo listener delegado para todos los botones "Copiar mi link" de
+    // la tabla de productos, en vez de uno por fila — más simple y sigue
+    // funcionando igual si la tabla se vuelve a renderizar.
+    cont.addEventListener('click', async (ev) => {
+      const btn = ev.target.closest('.btn-copiar-producto');
+      if (!btn) return;
+      const textoOriginal = btn.textContent;
+      try {
+        await navigator.clipboard.writeText(btn.dataset.link);
+        btn.textContent = '¡Copiado!';
+        setTimeout(() => { btn.textContent = textoOriginal; }, 1800);
+      } catch (e) {
+        btn.textContent = 'No se pudo copiar';
+        setTimeout(() => { btn.textContent = textoOriginal; }, 1800);
       }
     });
   } catch (err) {

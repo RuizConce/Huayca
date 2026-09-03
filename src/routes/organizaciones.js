@@ -141,6 +141,34 @@ router.get('/mi-dashboard', requireAuth(['organizacion']), async (req, res) => {
   }
 });
 
+// GET /api/organizaciones/catalogo-comisiones - catálogo de productos
+// activos para que la organización decida qué le conviene promocionar,
+// pero SOLO con lo que le importa desde su perspectiva: nombre, imagen,
+// precio final y SU comisión (comision_afiliado, acá renombrada
+// "tu_comision"). El SELECT elige columnas de forma explícita a propósito
+// (nunca "SELECT p.*") para que sea imposible que precio_proveedor,
+// comision_huayca o comision_eliss se cuelen en la respuesta — esa info es
+// interna de Huayca, ni siquiera debería poder verse inspeccionando la
+// petición desde el navegador. Ordenado de mayor a menor comisión: lo
+// primero que ve la organización es lo que más le conviene vender.
+// Va ANTES de /:slug (mismo motivo que /mi-dashboard): si se registrara
+// después, "catalogo-comisiones" matchearía ahí como si fuera un slug.
+router.get('/catalogo-comisiones', requireAuth(['organizacion']), async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      `SELECT p.id, p.nombre, p.slug, p.imagen_principal, p.precio_final,
+              p.comision_afiliado AS tu_comision
+       FROM productos p
+       WHERE p.estado = 'activo'
+       ORDER BY tu_comision DESC, p.nombre`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al obtener el catálogo de comisiones' });
+  }
+});
+
 // GET /api/organizaciones/:slug - perfil público de una organización aprobada
 // (usado para el banner "estás comprando a través de..." y su página de perfil).
 // Va al final: si se registrara antes que /mi-dashboard, "mi-dashboard"

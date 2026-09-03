@@ -51,10 +51,17 @@ CREATE TABLE productos (
   imagen_principal LONGTEXT, -- URL o imagen subida como data: URI (ver POST /api/admin/upload-imagen)
   imagenes JSON, -- array de URLs adicionales
   precio_proveedor DECIMAL(10,0) NOT NULL,   -- monto que recibe el proveedor
-  comision_afiliado DECIMAL(10,0) NOT NULL DEFAULT 0,
+  comision_afiliado DECIMAL(10,0) NOT NULL DEFAULT 0, -- comisión de la ORGANIZACIÓN (nombre de columna histórico, no se renombra para no romper nada)
   comision_huayca DECIMAL(10,0) NOT NULL DEFAULT 0,
+  comision_eliss DECIMAL(10,0) NOT NULL DEFAULT 0, -- comisión de Eliss Conecta SpA (infraestructura/operación, empresa separada de Huayca como marca)
+  -- true = precio_proveedor YA incluye impuesto, no se suma nada aparte
+  -- (comportamiento por defecto, y el de todo producto creado antes de este
+  -- campo). false = hay que sumar monto_impuesto aparte al precio final.
+  impuesto_incluido BOOLEAN NOT NULL DEFAULT true,
+  monto_impuesto DECIMAL(10,0) NOT NULL DEFAULT 0, -- solo se suma si impuesto_incluido = false
   precio_final DECIMAL(10,0) GENERATED ALWAYS AS
-    (precio_proveedor + comision_afiliado + comision_huayca) STORED,
+    (precio_proveedor + comision_afiliado + comision_huayca + comision_eliss +
+     (CASE WHEN impuesto_incluido THEN 0 ELSE monto_impuesto END)) STORED,
   precio_normal DECIMAL(10,0), -- precio "tachado" de referencia/marketing
   stock INT DEFAULT 0,
   garantia_meses INT DEFAULT 6,
@@ -142,6 +149,8 @@ CREATE TABLE pedidos (
   monto_proveedor DECIMAL(10,0) NOT NULL,
   monto_comision_afiliado DECIMAL(10,0) NOT NULL DEFAULT 0,
   monto_comision_huayca DECIMAL(10,0) NOT NULL DEFAULT 0,
+  monto_comision_eliss DECIMAL(10,0) NOT NULL DEFAULT 0,
+  monto_impuesto DECIMAL(10,0) NOT NULL DEFAULT 0,
   monto_total DECIMAL(10,0) NOT NULL,
 
   cantidad INT DEFAULT 1,
@@ -190,7 +199,7 @@ CREATE TABLE pagos (
 CREATE TABLE comisiones (
   id INT AUTO_INCREMENT PRIMARY KEY,
   pedido_id INT NOT NULL,
-  tipo ENUM('afiliado','huayca','proveedor') NOT NULL,
+  tipo ENUM('afiliado','huayca','proveedor','eliss') NOT NULL,
   organizacion_id INT NULL, -- solo si tipo = afiliado
   monto DECIMAL(10,0) NOT NULL,
   estado ENUM('pendiente','solicitada','aprobada','pagada','anulada') DEFAULT 'pendiente',

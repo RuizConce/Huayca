@@ -65,12 +65,57 @@ async function ensureIndex(connection, tabla, indice, definicionColumnas) {
   return true;
 }
 
+// precio_final es una columna GENERATED: ensureColumn/ensureColumnType no
+// sirven acá (la columna ya existe con el mismo tipo, lo que cambia es su
+// expresión). Se detecta comparando GENERATION_EXPRESSION contra el nombre
+// de la columna nueva que la fórmula debería referenciar — si ya la
+// referencia, ya está migrada. Debe correr DESPUÉS de que
+// comision_eliss/impuesto_incluido/monto_impuesto existan (están en
+// MIGRACIONES_INCREMENTALES, que corre antes en runMigration).
+async function actualizarPrecioFinalGenerado(connection) {
+  const [rows] = await connection.query(
+    `SELECT GENERATION_EXPRESSION FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'productos' AND COLUMN_NAME = 'precio_final'`
+  );
+  if (!rows.length) return false; // no debería pasar (la tabla/columna ya se crea en schema.sql), pero por las dudas
+  const expresionActual = rows[0].GENERATION_EXPRESSION || '';
+  if (expresionActual.includes('comision_eliss')) return false; // ya migrada
+  await connection.query(`
+    ALTER TABLE productos MODIFY COLUMN precio_final DECIMAL(10,0) GENERATED ALWAYS AS
+      (precio_proveedor + comision_afiliado + comision_huayca + comision_eliss +
+       (CASE WHEN impuesto_incluido THEN 0 ELSE monto_impuesto END)) STORED
+  `);
+  return true;
+}
+
+// comisiones.tipo es un ENUM: agrega 'eliss' como valor válido si todavía
+// no está. COLUMN_TYPE trae la definición completa del enum tal como quedó
+// declarada (ej. "enum('afiliado','huayca','proveedor')"), así que basta
+// buscar la substring.
+async function agregarTipoComisionEliss(connection) {
+  const [rows] = await connection.query(
+    `SELECT COLUMN_TYPE FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'comisiones' AND COLUMN_NAME = 'tipo'`
+  );
+  if (!rows.length || rows[0].COLUMN_TYPE.includes("'eliss'")) return false;
+  await connection.query(`ALTER TABLE comisiones MODIFY COLUMN tipo ENUM('afiliado','huayca','proveedor','eliss') NOT NULL`);
+  return true;
+}
+
 // Cambios de schema posteriores al schema.sql original, aplicados de forma
 // incremental e idempotente (no rompen si ya existen).
 const MIGRACIONES_INCREMENTALES = [
   { tabla: 'proveedores', columna: 'logo_url', definicion: 'logo_url VARCHAR(500) AFTER datos_bancarios' },
   { tabla: 'pedidos', columna: 'notificaciones_enviadas_at', definicion: 'notificaciones_enviadas_at TIMESTAMP NULL AFTER direccion_envio' },
-  { tabla: 'productos', columna: 'regiones_disponibles', definicion: 'regiones_disponibles JSON AFTER estado' }
+  { tabla: 'productos', columna: 'regiones_disponibles', definicion: 'regiones_disponibles JSON AFTER estado' },
+  // Desglose de precio de 5 componentes (ver actualizarPrecioFinalGenerado
+  // más abajo, que recién puede correr una vez que estas 3 columnas ya
+  // existen porque la redefine precio_final las referencia).
+  { tabla: 'productos', columna: 'comision_eliss', definicion: 'comision_eliss DECIMAL(10,0) NOT NULL DEFAULT 0 AFTER comision_huayca' },
+  { tabla: 'productos', columna: 'impuesto_incluido', definicion: 'impuesto_incluido BOOLEAN NOT NULL DEFAULT true AFTER comision_eliss' },
+  { tabla: 'productos', columna: 'monto_impuesto', definicion: 'monto_impuesto DECIMAL(10,0) NOT NULL DEFAULT 0 AFTER impuesto_incluido' },
+  { tabla: 'pedidos', columna: 'monto_comision_eliss', definicion: 'monto_comision_eliss DECIMAL(10,0) NOT NULL DEFAULT 0 AFTER monto_comision_huayca' },
+  { tabla: 'pedidos', columna: 'monto_impuesto', definicion: 'monto_impuesto DECIMAL(10,0) NOT NULL DEFAULT 0 AFTER monto_comision_eliss' }
 ];
 
 // Las columnas de imagen partieron como VARCHAR(500) (pensadas para URLs) y
@@ -309,6 +354,16 @@ async function runMigration() {
   }
   if (indicesAgregados.length) {
     resultado.mensaje += ` (índices agregados: ${indicesAgregados.join(', ')})`;
+  }
+
+  const precioFinalActualizado = await actualizarPrecioFinalGenerado(connection);
+  if (precioFinalActualizado) {
+    resultado.mensaje += ' (productos.precio_final recalculado con comisión Eliss + impuesto)';
+  }
+
+  const tipoComisionEliss = await agregarTipoComisionEliss(connection);
+  if (tipoComisionEliss) {
+    resultado.mensaje += " (comisiones.tipo ahora acepta 'eliss')";
   }
 
   const heroMigrado = await migrarHeroASlides(connection);

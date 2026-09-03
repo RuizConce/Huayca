@@ -171,6 +171,16 @@
     <input id="productoComisionAfiliado" type="number" oninput="actualizarPreview()">
     <label>Comisión Huayca ($)</label>
     <input id="productoComisionHuayca" type="number" oninput="actualizarPreview()">
+    <label>Comisión Eliss ($)</label>
+    <input id="productoComisionEliss" type="number" oninput="actualizarPreview()">
+    <label style="display:flex; align-items:center; gap:8px; margin-top:16px;">
+      <input type="checkbox" id="productoImpuestoIncluido" style="width:auto;" checked onchange="toggleImpuesto()">
+      ¿El precio del proveedor ya incluye impuesto?
+    </label>
+    <div id="bloqueImpuesto" class="hidden">
+      <label>Monto de impuesto ($)</label>
+      <input id="productoMontoImpuesto" type="number" oninput="actualizarPreview()">
+    </div>
     <label>Precio normal / referencia ($) — opcional</label>
     <input id="productoPrecioNormal" type="number">
     <label>Stock</label>
@@ -436,6 +446,17 @@ function toggleRestriccionRegion() {
   }
 }
 
+// Si el precio del proveedor YA incluye impuesto (default), no hay nada
+// que sumar aparte y el campo de monto queda oculto (y en 0, para que
+// actualizarPreview() no arrastre un valor viejo que ya no debería
+// contarse). Si se desmarca, aparece el campo para ingresarlo.
+function toggleImpuesto() {
+  const incluido = document.getElementById('productoImpuestoIncluido').checked;
+  document.getElementById('bloqueImpuesto').classList.toggle('hidden', incluido);
+  if (incluido) document.getElementById('productoMontoImpuesto').value = '';
+  actualizarPreview();
+}
+
 function marcarRegiones(regiones) {
   armarChecksRegiones();
   const set = new Set(regiones || []);
@@ -453,9 +474,11 @@ function leerRegionesSeleccionadas() {
 function abrirModalProducto() {
   document.getElementById('modalProductoTitulo').textContent = 'Nuevo producto';
   document.getElementById('productoId').value = '';
-  ['productoNombre','productoDescripcion','productoImagen','productoPrecioProveedor','productoComisionAfiliado','productoComisionHuayca','productoPrecioNormal'].forEach(id => document.getElementById(id).value = '');
+  ['productoNombre','productoDescripcion','productoImagen','productoPrecioProveedor','productoComisionAfiliado','productoComisionHuayca','productoComisionEliss','productoMontoImpuesto','productoPrecioNormal'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('productoStock').value = 0;
   document.getElementById('productoEstado').value = 'borrador';
+  document.getElementById('productoImpuestoIncluido').checked = true;
+  document.getElementById('bloqueImpuesto').classList.add('hidden');
   actualizarPreview();
   actualizarPreviewImagen('productoImagen', 'previewProductoImagen', 'dimProductoImagen');
   marcarRegiones([]);
@@ -471,6 +494,13 @@ function editarProducto(p) {
   document.getElementById('productoPrecioProveedor').value = p.precio_proveedor || 0;
   document.getElementById('productoComisionAfiliado').value = p.comision_afiliado || 0;
   document.getElementById('productoComisionHuayca').value = p.comision_huayca || 0;
+  document.getElementById('productoComisionEliss').value = p.comision_eliss || 0;
+  // impuesto_incluido llega de MySQL como 0/1 (BOOLEAN = TINYINT), no como
+  // true/false real — !! lo normaliza antes de asignarlo al checkbox.
+  const impuestoIncluido = p.impuesto_incluido === undefined ? true : !!p.impuesto_incluido;
+  document.getElementById('productoImpuestoIncluido').checked = impuestoIncluido;
+  document.getElementById('bloqueImpuesto').classList.toggle('hidden', impuestoIncluido);
+  document.getElementById('productoMontoImpuesto').value = p.monto_impuesto || 0;
   document.getElementById('productoPrecioNormal').value = p.precio_normal || '';
   document.getElementById('productoStock').value = p.stock || 0;
   document.getElementById('productoEstado').value = p.estado || 'borrador';
@@ -541,7 +571,10 @@ function actualizarPreview() {
   const pp = Number(document.getElementById('productoPrecioProveedor').value) || 0;
   const ca = Number(document.getElementById('productoComisionAfiliado').value) || 0;
   const ch = Number(document.getElementById('productoComisionHuayca').value) || 0;
-  document.getElementById('precioFinalPreview').textContent = '$' + (pp + ca + ch).toLocaleString('es-CL');
+  const ce = Number(document.getElementById('productoComisionEliss').value) || 0;
+  const impuestoIncluido = document.getElementById('productoImpuestoIncluido').checked;
+  const mi = impuestoIncluido ? 0 : (Number(document.getElementById('productoMontoImpuesto').value) || 0);
+  document.getElementById('precioFinalPreview').textContent = '$' + (pp + ca + ch + ce + mi).toLocaleString('es-CL');
 }
 
 async function guardarProducto() {
@@ -554,6 +587,11 @@ async function guardarProducto() {
     precio_proveedor: Number(document.getElementById('productoPrecioProveedor').value) || 0,
     comision_afiliado: Number(document.getElementById('productoComisionAfiliado').value) || 0,
     comision_huayca: Number(document.getElementById('productoComisionHuayca').value) || 0,
+    comision_eliss: Number(document.getElementById('productoComisionEliss').value) || 0,
+    impuesto_incluido: document.getElementById('productoImpuestoIncluido').checked,
+    monto_impuesto: document.getElementById('productoImpuestoIncluido').checked
+      ? 0
+      : (Number(document.getElementById('productoMontoImpuesto').value) || 0),
     precio_normal: document.getElementById('productoPrecioNormal').value ? Number(document.getElementById('productoPrecioNormal').value) : null,
     stock: Number(document.getElementById('productoStock').value) || 0,
     estado: document.getElementById('productoEstado').value,

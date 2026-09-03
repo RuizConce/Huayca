@@ -314,6 +314,29 @@ router.get('/productos', async (req, res) => {
   }
 });
 
+// GET /api/admin/productos/desglose — todos los productos ACTIVOS con el
+// desglose completo de precio (los 5 componentes), para la pestaña Ventas
+// del panel. Va antes de POST /productos a propósito, aunque no haya
+// conflicto de rutas real (no existe un GET /productos/:id), para que quede
+// junto al resto de las rutas de listado.
+router.get('/productos/desglose', async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      `SELECT p.id, p.nombre, p.slug, pr.nombre AS proveedor_nombre,
+              p.precio_proveedor, p.comision_afiliado, p.comision_huayca, p.comision_eliss,
+              p.impuesto_incluido, p.monto_impuesto, p.precio_final, p.stock
+       FROM productos p
+       JOIN proveedores pr ON pr.id = p.proveedor_id
+       WHERE p.estado = 'activo'
+       ORDER BY pr.nombre, p.nombre`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al obtener el desglose de productos' });
+  }
+});
+
 // Normaliza lo que venga en regiones_disponibles (del panel de admin) al
 // shape que se guarda: JSON string de un array no vacío, o NULL directo
 // si viene vacío/no viene — así "sin restricción" queda representado de
@@ -326,7 +349,8 @@ router.post('/productos', async (req, res) => {
   try {
     const {
       proveedor_id, categoria_id, nombre, descripcion, imagen_principal, imagenes,
-      precio_proveedor, comision_afiliado, comision_huayca, precio_normal,
+      precio_proveedor, comision_afiliado, comision_huayca, comision_eliss,
+      impuesto_incluido, monto_impuesto, precio_normal,
       stock, garantia_meses, estado, regiones_disponibles
     } = req.body;
 
@@ -341,12 +365,14 @@ router.post('/productos', async (req, res) => {
     const [result] = await db.query(
       `INSERT INTO productos
        (proveedor_id, categoria_id, nombre, slug, descripcion, imagen_principal, imagenes,
-        precio_proveedor, comision_afiliado, comision_huayca, precio_normal, stock, garantia_meses, estado,
+        precio_proveedor, comision_afiliado, comision_huayca, comision_eliss,
+        impuesto_incluido, monto_impuesto, precio_normal, stock, garantia_meses, estado,
         regiones_disponibles)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         proveedor_id, categoria_id || null, nombre, slug, descripcion || null, imagen_principal || null,
         JSON.stringify(imagenes || []), precio_proveedor, comision_afiliado || 0, comision_huayca || 0,
+        comision_eliss || 0, impuesto_incluido !== false, monto_impuesto || 0,
         precio_normal || null, stock ?? 0, garantia_meses ?? 6, estado || 'borrador',
         normalizarRegionesDisponibles(regiones_disponibles)
       ]
@@ -362,7 +388,8 @@ router.put('/productos/:id', async (req, res) => {
   try {
     const {
       categoria_id, nombre, descripcion, imagen_principal, imagenes,
-      precio_proveedor, comision_afiliado, comision_huayca, precio_normal,
+      precio_proveedor, comision_afiliado, comision_huayca, comision_eliss,
+      impuesto_incluido, monto_impuesto, precio_normal,
       stock, garantia_meses, estado, regiones_disponibles
     } = req.body;
 
@@ -373,6 +400,12 @@ router.put('/productos/:id', async (req, res) => {
     // campo" — con COALESCE, mandar NULL para limpiar la restricción
     // habría quedado indistinguible de no mandar nada, y nunca se hubiera
     // podido volver a "disponible en todo Chile" una vez restringido.
+    // impuesto_incluido es el mismo caso que regiones_disponibles pero con
+    // un booleano: el checkbox del form siempre manda su estado real
+    // (true/false), nunca "no tocar", así que tampoco usa COALESCE — con
+    // COALESCE(false, ...) el resultado igual sería false (COALESCE solo
+    // sustituye NULL), pero se deja explícito por claridad y para no
+    // depender de ese detalle.
     const [result] = await db.query(
       `UPDATE productos SET
          categoria_id = COALESCE(?, categoria_id),
@@ -383,6 +416,9 @@ router.put('/productos/:id', async (req, res) => {
          precio_proveedor = COALESCE(?, precio_proveedor),
          comision_afiliado = COALESCE(?, comision_afiliado),
          comision_huayca = COALESCE(?, comision_huayca),
+         comision_eliss = COALESCE(?, comision_eliss),
+         impuesto_incluido = ?,
+         monto_impuesto = COALESCE(?, monto_impuesto),
          precio_normal = COALESCE(?, precio_normal),
          stock = COALESCE(?, stock),
          garantia_meses = COALESCE(?, garantia_meses),
@@ -392,7 +428,9 @@ router.put('/productos/:id', async (req, res) => {
       [
         categoria_id ?? null, nombre || null, descripcion || null, imagen_principal || null,
         imagenes ? JSON.stringify(imagenes) : null,
-        precio_proveedor ?? null, comision_afiliado ?? null, comision_huayca ?? null, precio_normal ?? null,
+        precio_proveedor ?? null, comision_afiliado ?? null, comision_huayca ?? null,
+        comision_eliss ?? null, impuesto_incluido !== false, monto_impuesto ?? null,
+        precio_normal ?? null,
         stock ?? null, garantia_meses ?? null, estado || null,
         normalizarRegionesDisponibles(regiones_disponibles), req.params.id
       ]

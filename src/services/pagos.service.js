@@ -65,6 +65,11 @@ async function aprobarPagoPedido({ id, codigo, referencia_externa, metodo_pago, 
     if (pedido.organizacion_id) {
       comisiones.push([pedido.id, 'afiliado', pedido.organizacion_id, pedido.monto_comision_afiliado]);
     }
+    // La comisión de Eliss Conecta SpA es independiente de si la venta vino
+    // con organización o no (a diferencia de 'afiliado', que sin
+    // organización se le suma a 'huayca' más arriba) — es la operación de
+    // infraestructura de Huayca como negocio, siempre se registra igual.
+    comisiones.push([pedido.id, 'eliss', null, pedido.monto_comision_eliss]);
     for (const c of comisiones) {
       await conn.query(
         `INSERT INTO comisiones (pedido_id, tipo, organizacion_id, monto) VALUES (?, ?, ?, ?)`,

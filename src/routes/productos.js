@@ -53,7 +53,8 @@ router.get('/:slug', async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'Producto no encontrado' });
 
     // No exponer el desglose interno de comisión al público
-    const { precio_proveedor, comision_afiliado, comision_huayca, ...producto } = rows[0];
+    const { precio_proveedor, comision_afiliado, comision_huayca, comision_eliss,
+      impuesto_incluido, monto_impuesto, ...producto } = rows[0];
     res.json(producto);
   } catch (err) {
     console.error(err);
