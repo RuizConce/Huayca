@@ -121,6 +121,18 @@
 
 <script src="js/huayca.js"></script>
 <script>
+// Descripción colapsable ("Ver más"/"Ver menos"): por arriba de este largo
+// se trunca en el corte de palabra más cercano (no a la mitad de una
+// palabra) y se agrega un botón para expandir/colapsar. Texto corto no se
+// toca — ni truncado ni botón.
+const UMBRAL_DESC = 300;
+function truncarDescripcion(texto, limite) {
+  if (texto.length <= limite) return texto;
+  const cortado = texto.slice(0, limite);
+  const ultimoEspacio = cortado.lastIndexOf(' ');
+  return (ultimoEspacio > limite * 0.6 ? cortado.slice(0, ultimoEspacio) : cortado) + '…';
+}
+
 async function cargarProducto() {
   const params = new URLSearchParams(window.location.search);
   const slug = params.get('slug');
@@ -139,13 +151,17 @@ async function cargarProducto() {
     const orgSlug = Huayca.getOrgActivaSlug();
     const linkCheckout = `checkout.html?slug=${encodeURIComponent(p.slug)}${orgSlug ? '&org=' + encodeURIComponent(orgSlug) : ''}`;
 
+    const descripcion = p.descripcion || 'Sin descripción disponible.';
+    const descEsLarga = descripcion.length > UMBRAL_DESC;
+
     cont.innerHTML = `
       <div class="ficha-producto">
         <div class="ficha-img">${p.imagen_principal ? `<img src="${p.imagen_principal}" alt="${p.nombre}">` : Huayca.iconoProducto(p)}</div>
         <div class="ficha-info">
           ${p.categoria_nombre ? `<span class="cat-tag">${p.categoria_nombre}</span>` : ''}
           <h1>${p.nombre}</h1>
-          <p class="desc">${p.descripcion || 'Sin descripción disponible.'}</p>
+          <p class="desc" id="descProducto">${descEsLarga ? truncarDescripcion(descripcion, UMBRAL_DESC) : descripcion}</p>
+          ${descEsLarga ? '<button type="button" class="btn-ver-mas" id="btnVerMasDesc">Ver más</button>' : ''}
           <div class="ficha-precios">
             <span class="final">${Huayca.formatoCLP(p.precio_final)}</span>
             ${p.precio_normal ? `<span class="normal">${Huayca.formatoCLP(p.precio_normal)}</span>` : ''}
@@ -178,6 +194,17 @@ async function cargarProducto() {
     if (btnComprar && p.stock > 0) {
       btnComprar.addEventListener('click', () => {
         Huayca.trackEvento('agregar_carrito', { producto_id: p.id, organizacion_id: organizacionId });
+      });
+    }
+
+    if (descEsLarga) {
+      const descEl = document.getElementById('descProducto');
+      const btnVerMas = document.getElementById('btnVerMasDesc');
+      let expandida = false;
+      btnVerMas.addEventListener('click', () => {
+        expandida = !expandida;
+        descEl.textContent = expandida ? descripcion : truncarDescripcion(descripcion, UMBRAL_DESC);
+        btnVerMas.textContent = expandida ? 'Ver menos' : 'Ver más';
       });
     }
   } catch (e) {

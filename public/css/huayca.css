@@ -465,7 +465,9 @@ footer.site ul a:hover { color: #fff; }
 .ficha-img img { width: 100%; height: 100%; object-fit: cover; }
 .ficha-info .cat-tag { font-size: 12px; font-weight: 700; color: var(--green-dark); text-transform: uppercase; letter-spacing: 0.04em; }
 .ficha-info h1 { font-size: 28px; color: var(--navy); margin: 8px 0 12px; }
-.ficha-info .desc { color: var(--text-muted); font-size: 14.5px; margin-bottom: 18px; }
+.ficha-info .desc { color: var(--text-muted); font-size: 14.5px; margin-bottom: 6px; }
+.btn-ver-mas { background: none; border: none; padding: 0; color: var(--green-dark); font-size: 13px; font-weight: 700; cursor: pointer; margin-bottom: 18px; }
+.btn-ver-mas:hover { text-decoration: underline; }
 .ficha-precios { display: flex; align-items: baseline; gap: 12px; margin-bottom: 6px; }
 .ficha-precios .final { font-size: 32px; font-weight: 800; color: var(--navy); }
 .ficha-precios .normal { font-size: 15px; color: var(--text-soft); text-decoration: line-through; }
@@ -479,7 +481,8 @@ footer.site ul a:hover { color: #fff; }
 .resumen-card { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-sm); border: 1px solid var(--border); padding: 22px; position: sticky; top: 90px; }
 .resumen-card h3 { margin: 0 0 14px; font-size: 15px; color: var(--navy); }
 .resumen-producto { display: flex; gap: 12px; align-items: center; margin-bottom: 14px; }
-.resumen-producto .icono { width: 56px; height: 56px; border-radius: 10px; background: var(--bg); display: flex; align-items: center; justify-content: center; font-size: 26px; flex-shrink: 0; }
+.resumen-producto .icono { width: 56px; height: 56px; border-radius: 10px; background: var(--bg); display: flex; align-items: center; justify-content: center; font-size: 26px; flex-shrink: 0; overflow: hidden; }
+.resumen-producto .icono img { width: 100%; height: 100%; object-fit: cover; }
 .resumen-producto b { font-size: 13.5px; color: var(--text); display: block; }
 .resumen-linea { display: flex; justify-content: space-between; font-size: 13.5px; color: var(--text-muted); padding: 6px 0; }
 .resumen-linea.total { border-top: 1px solid var(--border); margin-top: 8px; padding-top: 12px; font-weight: 800; color: var(--navy); font-size: 15px; }

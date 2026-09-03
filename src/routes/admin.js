@@ -405,15 +405,50 @@ router.put('/productos/:id', async (req, res) => {
   }
 });
 
-// Baja lógica: pausa el producto; no se borra por integridad con pedidos históricos
+// DELETE /api/admin/productos/:id
+// Si el producto NUNCA tuvo pedidos, se borra de verdad. Si alguna vez
+// tuvo uno (aunque hoy esté todo rechazado/reembolsado), NO se borra —
+// pedidos.producto_id referencia esta fila y es el registro histórico de
+// esa venta, borrar el producto lo rompería — se pausa en su lugar
+// (estado='pausado', ya no aparece en el catálogo público) y se avisa por
+// qué en la respuesta para que el admin no piense que fue un error.
 router.delete('/productos/:id', async (req, res) => {
+  const conn = await db.getConnection();
   try {
-    const [result] = await db.query(`UPDATE productos SET estado = 'pausado' WHERE id = ?`, [req.params.id]);
-    if (!result.affectedRows) return res.status(404).json({ error: 'Producto no encontrado' });
-    res.json({ ok: true, mensaje: 'Producto pausado' });
+    const id = req.params.id;
+    const [[{ cantidad }]] = await conn.query('SELECT COUNT(*) AS cantidad FROM pedidos WHERE producto_id = ?', [id]);
+
+    if (cantidad > 0) {
+      const [result] = await conn.query(`UPDATE productos SET estado = 'pausado' WHERE id = ?`, [id]);
+      if (!result.affectedRows) return res.status(404).json({ error: 'Producto no encontrado' });
+      return res.json({
+        ok: true,
+        eliminado: false,
+        mensaje: `Este producto tiene ${cantidad} pedido${cantidad === 1 ? '' : 's'} asociado${cantidad === 1 ? '' : 's'} y no se puede eliminar (rompería ese historial). Se pausó en su lugar: ya no aparece en el catálogo público.`
+      });
+    }
+
+    // Sin pedidos: se puede borrar de verdad. Antes se limpian las filas de
+    // tracking (vistas del producto, clicks de link de organización) que lo
+    // referencian — son datos de analítica, no historial de negocio, así
+    // que perderlas junto con el producto no es un problema. Todo en una
+    // transacción para no dejar tracking huérfano si el DELETE final falla.
+    await conn.beginTransaction();
+    await conn.query('DELETE FROM eventos_actividad WHERE producto_id = ?', [id]);
+    await conn.query('DELETE FROM link_clicks WHERE producto_id = ?', [id]);
+    const [result] = await conn.query('DELETE FROM productos WHERE id = ?', [id]);
+    if (!result.affectedRows) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Producto no encontrado' });
+    }
+    await conn.commit();
+    res.json({ ok: true, eliminado: true, mensaje: 'Producto eliminado.' });
   } catch (err) {
+    await conn.rollback();
     console.error(err);
-    res.status(500).json({ error: 'Error al pausar producto' });
+    res.status(500).json({ error: 'Error al eliminar el producto' });
+  } finally {
+    conn.release();
   }
 });
 

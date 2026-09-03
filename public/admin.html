@@ -403,6 +403,7 @@ function renderProductos(productos) {
       </div>
       <div class="producto-actions">
         <button class="btn-secondary" onclick='editarProducto(${JSON.stringify(p)})'>Editar</button>
+        <button class="btn-danger" onclick='eliminarProducto(${p.id}, ${JSON.stringify(p.nombre)})'>Eliminar</button>
       </div>
     `;
     list.appendChild(row);
@@ -566,6 +567,23 @@ async function guardarProducto() {
       await apiFetch('/api/admin/productos', { method: 'POST', body: JSON.stringify(payload) });
     }
     cerrarModalProducto();
+    cargarProductos();
+  } catch (e) {
+    mostrarError(e.message);
+  }
+}
+
+// DELETE /api/admin/productos/:id: si el producto nunca tuvo pedidos se
+// borra de verdad; si ya tuvo alguno, el backend lo pausa en su lugar (no
+// se puede borrar sin romper el historial de pedidos) y devuelve
+// eliminado:false con un mensaje explicando por qué — se lo mostramos tal
+// cual con un alert para que quede claro que no fue un error, sino una
+// decisión a propósito.
+async function eliminarProducto(id, nombre) {
+  if (!confirm(`¿Eliminar "${nombre}"? Esta acción no se puede deshacer.`)) return;
+  try {
+    const resultado = await apiFetch('/api/admin/productos/' + id, { method: 'DELETE' });
+    if (resultado.eliminado === false) alert(resultado.mensaje);
     cargarProductos();
   } catch (e) {
     mostrarError(e.message);

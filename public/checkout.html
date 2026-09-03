@@ -79,7 +79,7 @@ function renderResumen() {
     <div class="resumen-card">
       <h3>Resumen del pedido</h3>
       <div class="resumen-producto">
-        <div class="icono">${Huayca.iconoProducto(p)}</div>
+        <div class="icono">${p.imagen_principal ? `<img src="${p.imagen_principal}" alt="${p.nombre}">` : Huayca.iconoProducto(p)}</div>
         <div>
           <b>${p.nombre}</b>
           <span style="font-size:12px;color:var(--text-soft);">${Huayca.formatoCLP(p.precio_final)} c/u</span>

@@ -183,7 +183,7 @@ async function cargarCatalogo() {
       <a class="producto-card" href="producto.html?slug=${encodeURIComponent(p.slug)}">
         <div class="producto-img-wrap">
           ${p.precio_normal ? '<span class="badge badge-oferta">OFERTA</span>' : ''}
-          <div class="placeholder-icono">${Huayca.iconoProducto(p)}</div>
+          ${p.imagen_principal ? `<img src="${p.imagen_principal}" alt="${p.nombre}">` : `<div class="placeholder-icono">${Huayca.iconoProducto(p)}</div>`}
         </div>
         <div class="producto-info">
           <h3>${p.nombre}</h3>
