@@ -351,7 +351,8 @@ router.post('/productos', async (req, res) => {
       proveedor_id, categoria_id, nombre, descripcion, imagen_principal, imagenes,
       precio_proveedor, comision_afiliado, comision_huayca, comision_eliss,
       impuesto_incluido, monto_impuesto, precio_normal,
-      stock, garantia_meses, estado, regiones_disponibles
+      stock, garantia_meses, estado, regiones_disponibles,
+      destacado, destacado_hasta
     } = req.body;
 
     if (!proveedor_id || !nombre || precio_proveedor == null) {
@@ -362,19 +363,22 @@ router.post('/productos', async (req, res) => {
     const [existe] = await db.query('SELECT id FROM productos WHERE slug = ?', [slug]);
     if (existe.length) slug = `${slug}-${Date.now().toString().slice(-4)}`;
 
+    const destacadoNuevo = !!destacado;
+
     const [result] = await db.query(
       `INSERT INTO productos
        (proveedor_id, categoria_id, nombre, slug, descripcion, imagen_principal, imagenes,
         precio_proveedor, comision_afiliado, comision_huayca, comision_eliss,
         impuesto_incluido, monto_impuesto, precio_normal, stock, garantia_meses, estado,
-        regiones_disponibles)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        regiones_disponibles, destacado, destacado_hasta, destacado_desde)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         proveedor_id, categoria_id || null, nombre, slug, descripcion || null, imagen_principal || null,
         JSON.stringify(imagenes || []), precio_proveedor, comision_afiliado || 0, comision_huayca || 0,
         comision_eliss || 0, impuesto_incluido !== false, monto_impuesto || 0,
         precio_normal || null, stock ?? 0, garantia_meses ?? 6, estado || 'borrador',
-        normalizarRegionesDisponibles(regiones_disponibles)
+        normalizarRegionesDisponibles(regiones_disponibles),
+        destacadoNuevo, destacado_hasta || null, destacadoNuevo ? new Date() : null
       ]
     );
     res.status(201).json({ id: result.insertId, slug });
@@ -390,7 +394,8 @@ router.put('/productos/:id', async (req, res) => {
       categoria_id, nombre, descripcion, imagen_principal, imagenes,
       precio_proveedor, comision_afiliado, comision_huayca, comision_eliss,
       impuesto_incluido, monto_impuesto, precio_normal,
-      stock, garantia_meses, estado, regiones_disponibles
+      stock, garantia_meses, estado, regiones_disponibles,
+      destacado, destacado_hasta
     } = req.body;
 
     // regiones_disponibles NO usa COALESCE como el resto de los campos: el
@@ -405,10 +410,30 @@ router.put('/productos/:id', async (req, res) => {
     // (true/false), nunca "no tocar", así que tampoco usa COALESCE — con
     // COALESCE(false, ...) el resultado igual sería false (COALESCE solo
     // sustituye NULL), pero se deja explícito por claridad y para no
-    // depender de ese detalle.
+    // depender de ese detalle. categoria_id es el mismo caso: elegir
+    // "Sin categoría" en el selector manda null a propósito, y con
+    // COALESCE ese null nunca hubiera podido borrar una categoría ya
+    // asignada.
+    const destacadoNuevo = !!destacado;
+
+    // destacado_desde marca CUÁNDO se ancló el producto (para el orden
+    // "más recién anclado primero"), no "la última vez que se guardó
+    // estando anclado" — por eso hace falta leer el estado actual antes de
+    // decidir si hay que tocar esta columna o dejarla como estaba.
+    const [[actual]] = await db.query('SELECT destacado, destacado_desde FROM productos WHERE id = ?', [req.params.id]);
+    if (!actual) return res.status(404).json({ error: 'Producto no encontrado' });
+    let destacadoDesde;
+    if (!destacadoNuevo) {
+      destacadoDesde = null;
+    } else if (actual.destacado) {
+      destacadoDesde = actual.destacado_desde; // ya estaba anclado: se conserva el momento original
+    } else {
+      destacadoDesde = new Date(); // recién se ancla ahora
+    }
+
     const [result] = await db.query(
       `UPDATE productos SET
-         categoria_id = COALESCE(?, categoria_id),
+         categoria_id = ?,
          nombre = COALESCE(?, nombre),
          descripcion = COALESCE(?, descripcion),
          imagen_principal = COALESCE(?, imagen_principal),
@@ -423,7 +448,10 @@ router.put('/productos/:id', async (req, res) => {
          stock = COALESCE(?, stock),
          garantia_meses = COALESCE(?, garantia_meses),
          estado = COALESCE(?, estado),
-         regiones_disponibles = ?
+         regiones_disponibles = ?,
+         destacado = ?,
+         destacado_hasta = ?,
+         destacado_desde = ?
        WHERE id = ?`,
       [
         categoria_id ?? null, nombre || null, descripcion || null, imagen_principal || null,
@@ -432,7 +460,8 @@ router.put('/productos/:id', async (req, res) => {
         comision_eliss ?? null, impuesto_incluido !== false, monto_impuesto ?? null,
         precio_normal ?? null,
         stock ?? null, garantia_meses ?? null, estado || null,
-        normalizarRegionesDisponibles(regiones_disponibles), req.params.id
+        normalizarRegionesDisponibles(regiones_disponibles),
+        destacadoNuevo, destacado_hasta || null, destacadoDesde, req.params.id
       ]
     );
     if (!result.affectedRows) return res.status(404).json({ error: 'Producto no encontrado' });

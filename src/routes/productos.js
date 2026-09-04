@@ -30,7 +30,18 @@ router.get('/', async (req, res) => {
       query += ' AND c.slug = ?';
       params.push(categoria);
     }
-    query += ' ORDER BY p.created_at DESC';
+    // Ofertas ancladas primero (destacado=true y, si tiene fecha límite,
+    // todavía no venció), ordenadas por el momento en que se marcaron como
+    // destacadas (más reciente primero); el resto, por más nuevo primero,
+    // como siempre. Un producto destacado cuya destacado_hasta ya pasó cae
+    // solo al bloque de abajo — no hace falta ningún job que lo desmarque,
+    // la condición de fecha ya lo saca del bloque anclado en cada consulta.
+    query += `
+      ORDER BY
+        CASE WHEN p.destacado = 1 AND (p.destacado_hasta IS NULL OR p.destacado_hasta >= CURDATE()) THEN 0 ELSE 1 END,
+        CASE WHEN p.destacado = 1 AND (p.destacado_hasta IS NULL OR p.destacado_hasta >= CURDATE()) THEN p.destacado_desde END DESC,
+        p.created_at DESC
+    `;
 
     const [rows] = await db.query(query, params);
     res.json(rows);

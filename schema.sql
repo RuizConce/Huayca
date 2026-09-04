@@ -73,6 +73,16 @@ CREATE TABLE productos (
   -- ya existía antes de este campo). Ver POST /api/pedidos para la
   -- validación real al comprar.
   regiones_disponibles JSON,
+  -- Ancla el producto arriba del catálogo/carrusel de destacados,
+  -- independiente de qué tan nuevo sea (ver ORDER BY de GET /api/productos).
+  -- destacado_hasta NULL + destacado=true = anclado indefinido hasta que
+  -- alguien lo desmarque a mano. destacado_desde NO lo pisa el admin — lo
+  -- calcula el backend (momento en que se marcó destacado=true la última
+  -- vez que pasó de false a true), para ordenar los anclados por "el más
+  -- recién anclado primero" sin que cada edición del producto lo revuelva.
+  destacado BOOLEAN NOT NULL DEFAULT false,
+  destacado_hasta DATE NULL,
+  destacado_desde TIMESTAMP NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (proveedor_id) REFERENCES proveedores(id),

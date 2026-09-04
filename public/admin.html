@@ -47,6 +47,7 @@
   .estado-activo { background: #e6f6ea; color: #1e8e3e; }
   .estado-borrador { background: #f1f1f1; color: #888; }
   .estado-agotado { background: #fdeeee; color: #c0392b; }
+  .estado-destacado { background: #fff7ec; color: #b8720a; font-weight: 700; }
 
   /* Modal */
   .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: flex-end; justify-content: center; z-index: 50; }
@@ -157,6 +158,20 @@
     <input id="productoNombre" placeholder="Ej: GPS Vehicular">
     <label>Descripción</label>
     <textarea id="productoDescripcion"></textarea>
+    <label>Categoría</label>
+    <select id="productoCategoria" onchange="onCambiaCategoria()">
+      <option value="">Sin categoría</option>
+    </select>
+    <div id="bloqueNuevaCategoria" class="hidden" style="margin-top:8px; padding:10px; background:#f4f5f2; border-radius:8px;">
+      <label style="margin-top:0;">Nombre de la categoría nueva</label>
+      <input id="nuevaCategoriaNombre" placeholder="Ej: Tecnología">
+      <label>Ícono (un emoji)</label>
+      <input id="nuevaCategoriaIcono" placeholder="Ej: 💡" maxlength="4">
+      <div class="modal-buttons" style="margin-top:10px;">
+        <button type="button" class="btn-secondary" onclick="cancelarNuevaCategoria()">Cancelar</button>
+        <button type="button" class="btn-primary" onclick="crearCategoriaRapida()">Crear categoría</button>
+      </div>
+    </div>
     <label>Imagen principal</label>
     <div class="con-preview">
       <img class="preview-img" id="previewProductoImagen" src="" alt="">
@@ -192,6 +207,14 @@
       <option value="pausado">Pausado</option>
       <option value="agotado">Agotado</option>
     </select>
+    <label style="display:flex; align-items:center; gap:8px; margin-top:16px;">
+      <input type="checkbox" id="productoDestacado" style="width:auto;" onchange="toggleDestacado()">
+      Marcar como oferta destacada (se ancla arriba)
+    </label>
+    <div id="bloqueDestacadoHasta" class="hidden">
+      <label>Destacar hasta (opcional — vacío = sin vencimiento, hasta que lo desmarques)</label>
+      <input id="productoDestacadoHasta" type="date">
+    </div>
     <label style="display:flex; align-items:center; gap:8px; margin-top:16px;">
       <input type="checkbox" id="productoTieneRestriccion" style="width:auto;" onchange="toggleRestriccionRegion()">
       ¿Este producto tiene restricción de región?
@@ -283,6 +306,7 @@ function mostrarApp() {
   document.getElementById('linkActividad').classList.remove('hidden');
   document.getElementById('linkSincronizarPago').classList.remove('hidden');
   cargarMarcas();
+  cargarCategorias();
 }
 
 function authHeaders() {
@@ -406,9 +430,17 @@ function renderProductos(productos) {
     const row = document.createElement('div');
     row.className = 'producto-row';
     const estadoClass = 'estado-' + (p.estado || 'borrador');
+    // "Anclado" = destacado=true Y (sin fecha límite O la fecha todavía no
+    // pasó) — mismo criterio que usa el ORDER BY de GET /api/productos. Un
+    // destacado ya vencido no muestra el badge (dejó de estar anclado,
+    // aunque el checkbox siga marcado hasta que alguien lo desmarque).
+    const destacadoActivo = p.destacado && (!p.destacado_hasta || p.destacado_hasta >= new Date().toISOString().slice(0, 10));
+    const badgeDestacado = destacadoActivo
+      ? `<span class="estado-badge estado-destacado">📌 Destacado${p.destacado_hasta ? ' hasta ' + p.destacado_hasta.slice(8, 10) + '/' + p.destacado_hasta.slice(5, 7) : ''}</span>`
+      : '';
     row.innerHTML = `
       <div class="producto-info">
-        <h4>${p.nombre} <span class="estado-badge ${estadoClass}">${p.estado}</span></h4>
+        <h4>${p.nombre} <span class="estado-badge ${estadoClass}">${p.estado}</span> ${badgeDestacado}</h4>
         <div class="precios">Final: <b>$${Number(p.precio_final).toLocaleString('es-CL')}</b> · Stock: ${p.stock}</div>
       </div>
       <div class="producto-actions">
@@ -421,6 +453,67 @@ function renderProductos(productos) {
 }
 
 // ---------- Productos ----------
+// ---------- Categorías (para el selector del formulario de producto) ----------
+let categoriasCache = [];
+
+async function cargarCategorias() {
+  try {
+    categoriasCache = await apiFetch('/api/admin/categorias');
+    poblarSelectCategorias();
+  } catch (e) {
+    // No bloquea el resto del panel — el selector queda con solo
+    // "Sin categoría" + "+ Nueva categoría" si esto falla.
+  }
+}
+
+function poblarSelectCategorias(seleccionarId) {
+  const select = document.getElementById('productoCategoria');
+  const actual = seleccionarId !== undefined ? seleccionarId : select.value;
+  select.innerHTML = '<option value="">Sin categoría</option>' +
+    categoriasCache.map((c) => `<option value="${c.id}">${c.icono ? c.icono + ' ' : ''}${c.nombre}</option>`).join('') +
+    '<option value="__nueva__">+ Nueva categoría…</option>';
+  select.value = actual != null ? String(actual) : '';
+}
+
+function onCambiaCategoria() {
+  const select = document.getElementById('productoCategoria');
+  document.getElementById('bloqueNuevaCategoria').classList.toggle('hidden', select.value !== '__nueva__');
+}
+
+function cancelarNuevaCategoria() {
+  document.getElementById('bloqueNuevaCategoria').classList.add('hidden');
+  document.getElementById('nuevaCategoriaNombre').value = '';
+  document.getElementById('nuevaCategoriaIcono').value = '';
+  poblarSelectCategorias(''); // vuelve a "Sin categoría" — no dejar el select trabado en "__nueva__"
+}
+
+async function crearCategoriaRapida() {
+  const nombre = document.getElementById('nuevaCategoriaNombre').value.trim();
+  const icono = document.getElementById('nuevaCategoriaIcono').value.trim();
+  if (!nombre) { mostrarError('El nombre de la categoría es obligatorio'); return; }
+  try {
+    const { id } = await apiFetch('/api/admin/categorias', {
+      method: 'POST',
+      body: JSON.stringify({ nombre, icono: icono || null })
+    });
+    await cargarCategorias();
+    poblarSelectCategorias(id);
+    document.getElementById('bloqueNuevaCategoria').classList.add('hidden');
+    document.getElementById('nuevaCategoriaNombre').value = '';
+    document.getElementById('nuevaCategoriaIcono').value = '';
+  } catch (e) {
+    mostrarError(e.message);
+  }
+}
+
+// ---------- Oferta destacada (se ancla arriba del catálogo/home, ver
+// GET /api/productos) ----------
+function toggleDestacado() {
+  const activo = document.getElementById('productoDestacado').checked;
+  document.getElementById('bloqueDestacadoHasta').classList.toggle('hidden', !activo);
+  if (!activo) document.getElementById('productoDestacadoHasta').value = '';
+}
+
 // ---------- Restricción de región (algunos productos, ej. perfumes, solo
 // se despachan a ciertas regiones) ----------
 // El grid de checkboxes se arma una sola vez (CHILE_REGIONES no cambia en
@@ -474,11 +567,15 @@ function leerRegionesSeleccionadas() {
 function abrirModalProducto() {
   document.getElementById('modalProductoTitulo').textContent = 'Nuevo producto';
   document.getElementById('productoId').value = '';
-  ['productoNombre','productoDescripcion','productoImagen','productoPrecioProveedor','productoComisionAfiliado','productoComisionHuayca','productoComisionEliss','productoMontoImpuesto','productoPrecioNormal'].forEach(id => document.getElementById(id).value = '');
+  ['productoNombre','productoDescripcion','productoImagen','productoPrecioProveedor','productoComisionAfiliado','productoComisionHuayca','productoComisionEliss','productoMontoImpuesto','productoPrecioNormal','productoDestacadoHasta'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('productoStock').value = 0;
   document.getElementById('productoEstado').value = 'borrador';
   document.getElementById('productoImpuestoIncluido').checked = true;
   document.getElementById('bloqueImpuesto').classList.add('hidden');
+  document.getElementById('productoDestacado').checked = false;
+  document.getElementById('bloqueDestacadoHasta').classList.add('hidden');
+  poblarSelectCategorias('');
+  document.getElementById('bloqueNuevaCategoria').classList.add('hidden');
   actualizarPreview();
   actualizarPreviewImagen('productoImagen', 'previewProductoImagen', 'dimProductoImagen');
   marcarRegiones([]);
@@ -504,6 +601,15 @@ function editarProducto(p) {
   document.getElementById('productoPrecioNormal').value = p.precio_normal || '';
   document.getElementById('productoStock').value = p.stock || 0;
   document.getElementById('productoEstado').value = p.estado || 'borrador';
+  poblarSelectCategorias(p.categoria_id ?? '');
+  document.getElementById('bloqueNuevaCategoria').classList.add('hidden');
+  // destacado llega de MySQL como 0/1 igual que impuesto_incluido — !! lo
+  // normaliza. destacado_hasta ya llega como 'YYYY-MM-DD' plano (columna
+  // DATE con dateStrings:['DATE'] en config/db.js), directo para el <input type="date">.
+  const destacadoActivo = !!p.destacado;
+  document.getElementById('productoDestacado').checked = destacadoActivo;
+  document.getElementById('bloqueDestacadoHasta').classList.toggle('hidden', !destacadoActivo);
+  document.getElementById('productoDestacadoHasta').value = p.destacado_hasta || '';
   actualizarPreview();
   actualizarPreviewImagen('productoImagen', 'previewProductoImagen', 'dimProductoImagen');
   marcarRegiones(p.regiones_disponibles);
@@ -595,9 +701,18 @@ async function guardarProducto() {
     precio_normal: document.getElementById('productoPrecioNormal').value ? Number(document.getElementById('productoPrecioNormal').value) : null,
     stock: Number(document.getElementById('productoStock').value) || 0,
     estado: document.getElementById('productoEstado').value,
-    regiones_disponibles: leerRegionesSeleccionadas()
+    regiones_disponibles: leerRegionesSeleccionadas(),
+    categoria_id: document.getElementById('productoCategoria').value || null,
+    destacado: document.getElementById('productoDestacado').checked,
+    destacado_hasta: document.getElementById('productoDestacado').checked
+      ? (document.getElementById('productoDestacadoHasta').value || null)
+      : null
   };
   if (!payload.nombre) { mostrarError('El nombre del producto es obligatorio'); return; }
+  if (payload.categoria_id === '__nueva__') {
+    mostrarError('Terminá de crear la categoría nueva (o cancelala) antes de guardar el producto');
+    return;
+  }
   try {
     if (id) {
       await apiFetch('/api/admin/productos/' + id, { method: 'PUT', body: JSON.stringify(payload) });

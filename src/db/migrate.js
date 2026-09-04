@@ -115,7 +115,13 @@ const MIGRACIONES_INCREMENTALES = [
   { tabla: 'productos', columna: 'impuesto_incluido', definicion: 'impuesto_incluido BOOLEAN NOT NULL DEFAULT true AFTER comision_eliss' },
   { tabla: 'productos', columna: 'monto_impuesto', definicion: 'monto_impuesto DECIMAL(10,0) NOT NULL DEFAULT 0 AFTER impuesto_incluido' },
   { tabla: 'pedidos', columna: 'monto_comision_eliss', definicion: 'monto_comision_eliss DECIMAL(10,0) NOT NULL DEFAULT 0 AFTER monto_comision_huayca' },
-  { tabla: 'pedidos', columna: 'monto_impuesto', definicion: 'monto_impuesto DECIMAL(10,0) NOT NULL DEFAULT 0 AFTER monto_comision_eliss' }
+  { tabla: 'pedidos', columna: 'monto_impuesto', definicion: 'monto_impuesto DECIMAL(10,0) NOT NULL DEFAULT 0 AFTER monto_comision_eliss' },
+  // Ofertas ancladas (ver GET /api/productos): destacado=false/NULL en todo
+  // lo existente antes de esto = comportamiento actual sin cambios (orden
+  // por fecha de siempre).
+  { tabla: 'productos', columna: 'destacado', definicion: 'destacado BOOLEAN NOT NULL DEFAULT false AFTER regiones_disponibles' },
+  { tabla: 'productos', columna: 'destacado_hasta', definicion: 'destacado_hasta DATE NULL AFTER destacado' },
+  { tabla: 'productos', columna: 'destacado_desde', definicion: 'destacado_desde TIMESTAMP NULL AFTER destacado_hasta' }
 ];
 
 // Las columnas de imagen partieron como VARCHAR(500) (pensadas para URLs) y

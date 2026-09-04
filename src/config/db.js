@@ -10,7 +10,15 @@ const pool = mysql.createPool({
   database: process.env.MYSQLDATABASE || process.env.DB_NAME,
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0
+  queueLimit: 0,
+  // Sin esto, una columna DATE (ej. productos.destacado_hasta, la única
+  // que hay en todo el schema) vuelve del driver como un JS Date a
+  // medianoche LOCAL — al pasar por JSON.stringify() se convierte a ISO en
+  // UTC, y en cualquier servidor con timezone detrás de UTC eso corre la
+  // fecha un día para atrás. Acotado a 'DATE' a propósito: no toca cómo se
+  // devuelven las columnas TIMESTAMP (created_at, updated_at, etc.), que
+  // el resto del código ya asume que llegan como Date/ISO.
+  dateStrings: ['DATE']
 });
 
 module.exports = pool;
