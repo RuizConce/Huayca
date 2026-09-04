@@ -158,7 +158,7 @@ async function cargarProducto() {
       <div class="ficha-producto">
         <div class="ficha-img">${p.imagen_principal ? `<img src="${p.imagen_principal}" alt="${p.nombre}">` : Huayca.iconoProducto(p)}</div>
         <div class="ficha-info">
-          ${p.categoria_nombre ? `<span class="cat-tag">${p.categoria_nombre}</span>` : ''}
+          ${(p.categorias || []).map((c) => `<span class="cat-tag">${c.icono ? c.icono + ' ' : ''}${c.nombre}</span>`).join(' ')}
           <h1>${p.nombre}</h1>
           <p class="desc" id="descProducto">${descEsLarga ? truncarDescripcion(descripcion, UMBRAL_DESC) : descripcion}</p>
           ${descEsLarga ? '<button type="button" class="btn-ver-mas" id="btnVerMasDesc">Ver más</button>' : ''}

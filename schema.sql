@@ -90,6 +90,21 @@ CREATE TABLE productos (
 );
 
 -- -------------------------------------------------
+-- PRODUCTO_CATEGORIAS (M:N — un producto puede estar en varias categorías
+-- a la vez, ej. "Pulsera QR" en Seguridad Y Tecnología). productos.categoria_id
+-- se deja tal cual por compatibilidad (no se borra) pero ya no es la fuente
+-- de verdad: se sincroniza como "la primera categoría marcada" nada más,
+-- para quien todavía la lea directo. Ver src/services/categorias.service.js.
+-- -------------------------------------------------
+CREATE TABLE producto_categorias (
+  producto_id INT NOT NULL,
+  categoria_id INT NOT NULL,
+  PRIMARY KEY (producto_id, categoria_id),
+  FOREIGN KEY (producto_id) REFERENCES productos(id) ON DELETE CASCADE,
+  FOREIGN KEY (categoria_id) REFERENCES categorias(id) ON DELETE CASCADE
+);
+
+-- -------------------------------------------------
 -- ORGANIZACIONES (Afiliados)
 -- Se registran, generan perfil y un slug único para
 -- compartir productos. Requieren aprobación de Huayca.

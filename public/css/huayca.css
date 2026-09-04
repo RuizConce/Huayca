@@ -348,6 +348,8 @@ header.site {
 .badge-oferta { background: var(--orange); color: #fff; }
 .producto-info { padding: 12px 14px 16px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
 .producto-info h3 { font-size: 13.5px; margin: 0; color: var(--text); font-weight: 600; line-height: 1.3; }
+.cat-tags-mini { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 1px; }
+.cat-tag-mini { font-size: 10px; font-weight: 700; color: var(--green-dark); background: var(--green-light); padding: 1px 6px; border-radius: 999px; white-space: nowrap; }
 .producto-precios { display: flex; align-items: baseline; gap: 8px; margin-top: 2px; }
 .precio-final { font-size: 16px; font-weight: 800; color: var(--navy); }
 .precio-normal { font-size: 12.5px; color: var(--text-soft); text-decoration: line-through; }

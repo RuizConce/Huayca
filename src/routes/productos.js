@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
+const { adjuntarCategorias } = require('../services/categorias.service');
 
 // GET /api/productos/categorias - listado público para armar filtros/menú
 router.get('/categorias', async (req, res) => {
@@ -19,15 +20,20 @@ router.get('/', async (req, res) => {
     const { categoria } = req.query;
     let query = `
       SELECT p.id, p.nombre, p.slug, p.descripcion, p.imagen_principal,
-             p.precio_final, p.precio_normal, p.stock, p.garantia_meses,
-             c.nombre AS categoria_nombre, c.slug AS categoria_slug
+             p.precio_final, p.precio_normal, p.stock, p.garantia_meses
       FROM productos p
-      LEFT JOIN categorias c ON c.id = p.categoria_id
       WHERE p.estado = 'activo'
     `;
     const params = [];
     if (categoria) {
-      query += ' AND c.slug = ?';
+      // Un producto puede estar en varias categorías a la vez
+      // (producto_categorias, M:N) — coincide si CUALQUIERA de ellas es la
+      // pedida, no una sola columna directa como antes.
+      query += ` AND EXISTS (
+        SELECT 1 FROM producto_categorias pc
+        JOIN categorias c ON c.id = pc.categoria_id
+        WHERE pc.producto_id = p.id AND c.slug = ?
+      )`;
       params.push(categoria);
     }
     // Ofertas ancladas primero (destacado=true y, si tiene fecha límite,
@@ -44,6 +50,7 @@ router.get('/', async (req, res) => {
     `;
 
     const [rows] = await db.query(query, params);
+    await adjuntarCategorias(rows);
     res.json(rows);
   } catch (err) {
     console.error(err);
@@ -66,6 +73,7 @@ router.get('/:slug', async (req, res) => {
     // No exponer el desglose interno de comisión al público
     const { precio_proveedor, comision_afiliado, comision_huayca, comision_eliss,
       impuesto_incluido, monto_impuesto, ...producto } = rows[0];
+    await adjuntarCategorias([producto]);
     res.json(producto);
   } catch (err) {
     console.error(err);

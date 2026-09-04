@@ -164,8 +164,15 @@ function productoCoincide(p) {
   if (busquedaActiva && !p.nombre.toLowerCase().includes(busquedaActiva)) return false;
   if (soloOfertas && !p.precio_normal) return false;
   if (categoriaActiva) {
-    const texto = `${p.categoria_slug || ''} ${p.categoria_nombre || ''}`.toLowerCase();
-    if (!texto.includes(categoriaActiva)) return false;
+    // Un producto puede estar en varias categorías (p.categorias, array) —
+    // coincide si CUALQUIERA de ellas es la activa. El backend
+    // (GET /api/productos?categoria=) ya filtra igual; este chequeo del
+    // lado del cliente es una segunda pasada por si en algún momento se
+    // combinan varios filtros a la vez.
+    const coincide = (p.categorias || []).some((c) =>
+      `${c.slug || ''} ${c.nombre || ''}`.toLowerCase().includes(categoriaActiva)
+    );
+    if (!coincide) return false;
   }
   return true;
 }
@@ -187,6 +194,7 @@ async function cargarCatalogo() {
         </div>
         <div class="producto-info">
           <h3>${p.nombre}</h3>
+          ${(p.categorias || []).length ? `<div class="cat-tags-mini">${p.categorias.map((c) => `<span class="cat-tag-mini">${c.icono ? c.icono + ' ' : ''}${c.nombre}</span>`).join('')}</div>` : ''}
           <div class="producto-precios">
             <span class="precio-final">${Huayca.formatoCLP(p.precio_final)}</span>
             ${p.precio_normal ? `<span class="precio-normal">${Huayca.formatoCLP(p.precio_normal)}</span>` : ''}

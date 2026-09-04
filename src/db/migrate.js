@@ -165,6 +165,18 @@ const TABLAS_INCREMENTALES = [
         FOREIGN KEY (pedido_id) REFERENCES pedidos(id)
       )
     `
+  },
+  {
+    tabla: 'producto_categorias',
+    createSql: `
+      CREATE TABLE producto_categorias (
+        producto_id INT NOT NULL,
+        categoria_id INT NOT NULL,
+        PRIMARY KEY (producto_id, categoria_id),
+        FOREIGN KEY (producto_id) REFERENCES productos(id) ON DELETE CASCADE,
+        FOREIGN KEY (categoria_id) REFERENCES categorias(id) ON DELETE CASCADE
+      )
+    `
   }
 ];
 
@@ -254,6 +266,20 @@ const CONTENIDO_DEFAULT = {
 // tiene que pasar acá. Idempotente: si la fila ya está en el shape nuevo
 // (tiene 'slides'), no hace nada; si no hay fila todavía, tampoco (el seed
 // de abajo se encarga de crearla con el default ya en shape nuevo).
+// Semilla producto_categorias con la categoría que cada producto ya tenía
+// en productos.categoria_id (una sola, la de antes de esto) — así ningún
+// producto existente pierde su categoría al pasar al modelo M:N. INSERT
+// IGNORE lo hace naturalmente idempotente (la relación ya insertada choca
+// con la PRIMARY KEY compuesta y se descarta en silencio en la próxima
+// corrida), así que no hace falta chequear nada antes de correrlo.
+async function migrarCategoriaIdAProductoCategorias(connection) {
+  const [result] = await connection.query(
+    `INSERT IGNORE INTO producto_categorias (producto_id, categoria_id)
+     SELECT id, categoria_id FROM productos WHERE categoria_id IS NOT NULL`
+  );
+  return result.affectedRows > 0;
+}
+
 async function migrarHeroASlides(connection) {
   const [rows] = await connection.query('SELECT valor FROM contenido_sitio WHERE clave = ?', ['hero']);
   if (!rows.length) return false;
@@ -351,6 +377,11 @@ async function runMigration() {
   }
   if (tablasAgregadas.length) {
     resultado.mensaje += ` (tablas agregadas: ${tablasAgregadas.join(', ')})`;
+  }
+
+  const categoriasMigradas = await migrarCategoriaIdAProductoCategorias(connection);
+  if (categoriasMigradas) {
+    resultado.mensaje += ' (categoria_id existente copiado a producto_categorias)';
   }
 
   const indicesAgregados = [];

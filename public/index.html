@@ -243,6 +243,7 @@ async function cargarDestacados() {
         </div>
         <div class="producto-info">
           <h3>${p.nombre}</h3>
+          ${(p.categorias || []).length ? `<div class="cat-tags-mini">${p.categorias.map((c) => `<span class="cat-tag-mini">${c.icono ? c.icono + ' ' : ''}${c.nombre}</span>`).join('')}</div>` : ''}
           <div class="producto-precios">
             <span class="precio-final">${Huayca.formatoCLP(p.precio_final)}</span>
             ${p.precio_normal ? `<span class="precio-normal">${Huayca.formatoCLP(p.precio_normal)}</span>` : ''}

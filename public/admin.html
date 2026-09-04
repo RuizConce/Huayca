@@ -158,10 +158,9 @@
     <input id="productoNombre" placeholder="Ej: GPS Vehicular">
     <label>Descripción</label>
     <textarea id="productoDescripcion"></textarea>
-    <label>Categoría</label>
-    <select id="productoCategoria" onchange="onCambiaCategoria()">
-      <option value="">Sin categoría</option>
-    </select>
+    <label>Categorías <small style="font-weight:400; color:#999;">(podés marcar varias)</small></label>
+    <div id="checksCategorias" style="display:grid; grid-template-columns:1fr 1fr; gap:5px; max-height:180px; overflow-y:auto; padding:10px; background:#f4f5f2; border-radius:8px;"></div>
+    <button type="button" class="btn-secondary" style="margin-top:8px;" onclick="mostrarNuevaCategoria()">+ Nueva categoría…</button>
     <div id="bloqueNuevaCategoria" class="hidden" style="margin-top:8px; padding:10px; background:#f4f5f2; border-radius:8px;">
       <label style="margin-top:0;">Nombre de la categoría nueva</label>
       <input id="nuevaCategoriaNombre" placeholder="Ej: Tecnología">
@@ -453,38 +452,57 @@ function renderProductos(productos) {
 }
 
 // ---------- Productos ----------
-// ---------- Categorías (para el selector del formulario de producto) ----------
+// ---------- Categorías (selector múltiple del formulario de producto —
+// un producto puede estar en varias a la vez, ver producto_categorias) ----------
 let categoriasCache = [];
 
 async function cargarCategorias() {
   try {
     categoriasCache = await apiFetch('/api/admin/categorias');
-    poblarSelectCategorias();
+    armarChecksCategorias(leerCategoriasSeleccionadas());
   } catch (e) {
-    // No bloquea el resto del panel — el selector queda con solo
-    // "Sin categoría" + "+ Nueva categoría" si esto falla.
+    // No bloquea el resto del panel — el bloque queda vacío si esto falla.
   }
 }
 
-function poblarSelectCategorias(seleccionarId) {
-  const select = document.getElementById('productoCategoria');
-  const actual = seleccionarId !== undefined ? seleccionarId : select.value;
-  select.innerHTML = '<option value="">Sin categoría</option>' +
-    categoriasCache.map((c) => `<option value="${c.id}">${c.icono ? c.icono + ' ' : ''}${c.nombre}</option>`).join('') +
-    '<option value="__nueva__">+ Nueva categoría…</option>';
-  select.value = actual != null ? String(actual) : '';
+// Reconstruye el grid de checkboxes desde categoriasCache, re-marcando las
+// que vengan en `seleccionadas` (ids como string o number, da igual). Se
+// llama tanto al cargar la lista completa como al crear una categoría
+// nueva a mitad de edición — en ambos casos hay que preservar lo que ya
+// estaba tildado.
+function armarChecksCategorias(seleccionadas) {
+  const set = new Set((seleccionadas || []).map(String));
+  const cont = document.getElementById('checksCategorias');
+  if (!categoriasCache.length) {
+    cont.innerHTML = '<small style="color:#888;">Todavía no hay categorías — creá la primera con el botón de abajo.</small>';
+    return;
+  }
+  cont.innerHTML = categoriasCache.map((c) => `
+    <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; font-weight:400;">
+      <input type="checkbox" class="check-categoria" value="${c.id}" style="width:auto;" ${set.has(String(c.id)) ? 'checked' : ''}>
+      ${c.icono ? c.icono + ' ' : ''}${c.nombre}
+    </label>
+  `).join('');
 }
 
-function onCambiaCategoria() {
-  const select = document.getElementById('productoCategoria');
-  document.getElementById('bloqueNuevaCategoria').classList.toggle('hidden', select.value !== '__nueva__');
+function leerCategoriasSeleccionadas() {
+  return [...document.querySelectorAll('.check-categoria:checked')].map((c) => c.value);
+}
+
+// Usada al abrir/editar un producto para dejar marcadas sus categorías
+// actuales (o ninguna, para "Nuevo producto").
+function marcarCategorias(ids) {
+  armarChecksCategorias((ids || []).map(String));
+}
+
+function mostrarNuevaCategoria() {
+  document.getElementById('bloqueNuevaCategoria').classList.remove('hidden');
 }
 
 function cancelarNuevaCategoria() {
   document.getElementById('bloqueNuevaCategoria').classList.add('hidden');
   document.getElementById('nuevaCategoriaNombre').value = '';
   document.getElementById('nuevaCategoriaIcono').value = '';
-  poblarSelectCategorias(''); // vuelve a "Sin categoría" — no dejar el select trabado en "__nueva__"
 }
 
 async function crearCategoriaRapida() {
@@ -492,12 +510,14 @@ async function crearCategoriaRapida() {
   const icono = document.getElementById('nuevaCategoriaIcono').value.trim();
   if (!nombre) { mostrarError('El nombre de la categoría es obligatorio'); return; }
   try {
+    const seleccionadasActuales = leerCategoriasSeleccionadas();
     const { id } = await apiFetch('/api/admin/categorias', {
       method: 'POST',
       body: JSON.stringify({ nombre, icono: icono || null })
     });
-    await cargarCategorias();
-    poblarSelectCategorias(id);
+    categoriasCache = await apiFetch('/api/admin/categorias');
+    // La categoría nueva queda marcada de una, junto con lo que ya estaba tildado.
+    armarChecksCategorias([...seleccionadasActuales, String(id)]);
     document.getElementById('bloqueNuevaCategoria').classList.add('hidden');
     document.getElementById('nuevaCategoriaNombre').value = '';
     document.getElementById('nuevaCategoriaIcono').value = '';
@@ -574,7 +594,7 @@ function abrirModalProducto() {
   document.getElementById('bloqueImpuesto').classList.add('hidden');
   document.getElementById('productoDestacado').checked = false;
   document.getElementById('bloqueDestacadoHasta').classList.add('hidden');
-  poblarSelectCategorias('');
+  marcarCategorias([]);
   document.getElementById('bloqueNuevaCategoria').classList.add('hidden');
   actualizarPreview();
   actualizarPreviewImagen('productoImagen', 'previewProductoImagen', 'dimProductoImagen');
@@ -601,7 +621,7 @@ function editarProducto(p) {
   document.getElementById('productoPrecioNormal').value = p.precio_normal || '';
   document.getElementById('productoStock').value = p.stock || 0;
   document.getElementById('productoEstado').value = p.estado || 'borrador';
-  poblarSelectCategorias(p.categoria_id ?? '');
+  marcarCategorias((p.categorias || []).map((c) => c.id));
   document.getElementById('bloqueNuevaCategoria').classList.add('hidden');
   // destacado llega de MySQL como 0/1 igual que impuesto_incluido — !! lo
   // normaliza. destacado_hasta ya llega como 'YYYY-MM-DD' plano (columna
@@ -702,17 +722,13 @@ async function guardarProducto() {
     stock: Number(document.getElementById('productoStock').value) || 0,
     estado: document.getElementById('productoEstado').value,
     regiones_disponibles: leerRegionesSeleccionadas(),
-    categoria_id: document.getElementById('productoCategoria').value || null,
+    categorias: leerCategoriasSeleccionadas().map(Number),
     destacado: document.getElementById('productoDestacado').checked,
     destacado_hasta: document.getElementById('productoDestacado').checked
       ? (document.getElementById('productoDestacadoHasta').value || null)
       : null
   };
   if (!payload.nombre) { mostrarError('El nombre del producto es obligatorio'); return; }
-  if (payload.categoria_id === '__nueva__') {
-    mostrarError('Terminá de crear la categoría nueva (o cancelala) antes de guardar el producto');
-    return;
-  }
   try {
     if (id) {
       await apiFetch('/api/admin/productos/' + id, { method: 'PUT', body: JSON.stringify(payload) });

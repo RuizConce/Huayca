@@ -6,6 +6,7 @@ const multer = require('multer');
 const db = require('../config/db');
 const { requireAuth } = require('../middleware/auth');
 const { aprobarPagoPedido, procesarPagoInfo } = require('../services/pagos.service');
+const { adjuntarCategorias, sincronizarCategoriasProducto } = require('../services/categorias.service');
 const { Payment } = require('mercadopago');
 const mpClient = require('../config/mercadopago');
 
@@ -294,10 +295,9 @@ router.get('/productos', async (req, res) => {
   try {
     const { proveedor_id } = req.query;
     let query = `
-      SELECT p.*, pr.nombre AS proveedor_nombre, c.nombre AS categoria_nombre
+      SELECT p.*, pr.nombre AS proveedor_nombre
       FROM productos p
       JOIN proveedores pr ON pr.id = p.proveedor_id
-      LEFT JOIN categorias c ON c.id = p.categoria_id
     `;
     const params = [];
     if (proveedor_id) {
@@ -307,6 +307,10 @@ router.get('/productos', async (req, res) => {
     query += ' ORDER BY p.created_at DESC';
 
     const [rows] = await db.query(query, params);
+    // categorias: [{id,nombre,slug,icono}, ...] — el panel las usa para
+    // pre-marcar los checkboxes al editar (ver PUT/POST más abajo, que
+    // sincronizan producto_categorias, la fuente de verdad real).
+    await adjuntarCategorias(rows);
     res.json(rows);
   } catch (err) {
     console.error(err);
@@ -348,7 +352,7 @@ function normalizarRegionesDisponibles(regiones) {
 router.post('/productos', async (req, res) => {
   try {
     const {
-      proveedor_id, categoria_id, nombre, descripcion, imagen_principal, imagenes,
+      proveedor_id, categorias, nombre, descripcion, imagen_principal, imagenes,
       precio_proveedor, comision_afiliado, comision_huayca, comision_eliss,
       impuesto_incluido, monto_impuesto, precio_normal,
       stock, garantia_meses, estado, regiones_disponibles,
@@ -365,6 +369,14 @@ router.post('/productos', async (req, res) => {
 
     const destacadoNuevo = !!destacado;
 
+    // categorias: array de ids marcados en el panel (checkboxes, ya no un
+    // solo <select>) — ver producto_categorias más abajo, esa es la fuente
+    // de verdad real. categoria_id se sigue llenando por compatibilidad con
+    // quien todavía la lea directo, sincronizada como "la primera
+    // categoría marcada" (o null si no se marcó ninguna).
+    const categoriaIds = Array.isArray(categorias) ? [...new Set(categorias.map(Number).filter(Boolean))] : [];
+    const categoriaIdPrincipal = categoriaIds.length ? categoriaIds[0] : null;
+
     const [result] = await db.query(
       `INSERT INTO productos
        (proveedor_id, categoria_id, nombre, slug, descripcion, imagen_principal, imagenes,
@@ -373,7 +385,7 @@ router.post('/productos', async (req, res) => {
         regiones_disponibles, destacado, destacado_hasta, destacado_desde)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        proveedor_id, categoria_id || null, nombre, slug, descripcion || null, imagen_principal || null,
+        proveedor_id, categoriaIdPrincipal, nombre, slug, descripcion || null, imagen_principal || null,
         JSON.stringify(imagenes || []), precio_proveedor, comision_afiliado || 0, comision_huayca || 0,
         comision_eliss || 0, impuesto_incluido !== false, monto_impuesto || 0,
         precio_normal || null, stock ?? 0, garantia_meses ?? 6, estado || 'borrador',
@@ -381,6 +393,7 @@ router.post('/productos', async (req, res) => {
         destacadoNuevo, destacado_hasta || null, destacadoNuevo ? new Date() : null
       ]
     );
+    await sincronizarCategoriasProducto(result.insertId, categoriaIds);
     res.status(201).json({ id: result.insertId, slug });
   } catch (err) {
     console.error(err);
@@ -391,7 +404,7 @@ router.post('/productos', async (req, res) => {
 router.put('/productos/:id', async (req, res) => {
   try {
     const {
-      categoria_id, nombre, descripcion, imagen_principal, imagenes,
+      categorias, nombre, descripcion, imagen_principal, imagenes,
       precio_proveedor, comision_afiliado, comision_huayca, comision_eliss,
       impuesto_incluido, monto_impuesto, precio_normal,
       stock, garantia_meses, estado, regiones_disponibles,
@@ -410,18 +423,28 @@ router.put('/productos/:id', async (req, res) => {
     // (true/false), nunca "no tocar", así que tampoco usa COALESCE — con
     // COALESCE(false, ...) el resultado igual sería false (COALESCE solo
     // sustituye NULL), pero se deja explícito por claridad y para no
-    // depender de ese detalle. categoria_id es el mismo caso: elegir
-    // "Sin categoría" en el selector manda null a propósito, y con
-    // COALESCE ese null nunca hubiera podido borrar una categoría ya
-    // asignada.
+    // depender de ese detalle.
     const destacadoNuevo = !!destacado;
+
+    // categorias: array de ids marcados en el panel (checkboxes) —
+    // producto_categorias (sincronizada más abajo) es la fuente de verdad
+    // real; categoria_id se sigue escribiendo por compatibilidad, tampoco
+    // con COALESCE por el mismo motivo que regiones_disponibles/
+    // impuesto_incluido: desmarcar todas las categorías tiene que poder
+    // dejarlo en null, no quedarse pegado en la última que tuvo.
+    const categoriasEnviadas = Array.isArray(categorias);
+    const categoriaIds = categoriasEnviadas ? [...new Set(categorias.map(Number).filter(Boolean))] : [];
 
     // destacado_desde marca CUÁNDO se ancló el producto (para el orden
     // "más recién anclado primero"), no "la última vez que se guardó
     // estando anclado" — por eso hace falta leer el estado actual antes de
-    // decidir si hay que tocar esta columna o dejarla como estaba.
-    const [[actual]] = await db.query('SELECT destacado, destacado_desde FROM productos WHERE id = ?', [req.params.id]);
+    // decidir si hay que tocar esta columna o dejarla como estaba. Se
+    // aprovecha la misma lectura para el fallback de categoria_id: si no
+    // se mandó `categorias` (un caller que no sea el panel), se deja tal
+    // cual estaba en vez de pisarla con null.
+    const [[actual]] = await db.query('SELECT destacado, destacado_desde, categoria_id FROM productos WHERE id = ?', [req.params.id]);
     if (!actual) return res.status(404).json({ error: 'Producto no encontrado' });
+    const categoriaIdPrincipal = categoriasEnviadas ? (categoriaIds.length ? categoriaIds[0] : null) : actual.categoria_id;
     let destacadoDesde;
     if (!destacadoNuevo) {
       destacadoDesde = null;
@@ -454,7 +477,7 @@ router.put('/productos/:id', async (req, res) => {
          destacado_desde = ?
        WHERE id = ?`,
       [
-        categoria_id ?? null, nombre || null, descripcion || null, imagen_principal || null,
+        categoriaIdPrincipal, nombre || null, descripcion || null, imagen_principal || null,
         imagenes ? JSON.stringify(imagenes) : null,
         precio_proveedor ?? null, comision_afiliado ?? null, comision_huayca ?? null,
         comision_eliss ?? null, impuesto_incluido !== false, monto_impuesto ?? null,
@@ -465,6 +488,10 @@ router.put('/productos/:id', async (req, res) => {
       ]
     );
     if (!result.affectedRows) return res.status(404).json({ error: 'Producto no encontrado' });
+    // Solo se toca producto_categorias si el body mandó categorias de
+    // verdad (el panel siempre lo hace) — así un caller que no la mande no
+    // termina borrando relaciones existentes sin querer.
+    if (categoriasEnviadas) await sincronizarCategoriasProducto(req.params.id, categoriaIds);
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
