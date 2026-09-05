@@ -1030,6 +1030,7 @@ router.get('/reportes/pedidos.csv', async (req, res) => {
     const [pedidos] = await db.query(
       `SELECT p.codigo, p.created_at, p.cantidad, p.monto_proveedor, p.monto_comision_afiliado,
               p.monto_comision_huayca, p.monto_total, p.estado_pago, p.estado_despacho,
+              p.codigo_descuento_usado,
               c.nombre AS cliente_nombre, c.email AS cliente_email,
               pr.nombre AS producto_nombre, prov.nombre AS proveedor_nombre,
               o.nombre AS organizacion_nombre
@@ -1055,7 +1056,7 @@ router.get('/reportes/pedidos.csv', async (req, res) => {
     const encabezados = [
       'fecha', 'codigo_pedido', 'cliente_nombre', 'cliente_email', 'producto', 'cantidad',
       'organizacion', 'proveedor', 'monto_proveedor', 'monto_comision_afiliado',
-      'monto_comision_huayca', 'monto_total', 'estado_pago', 'estado_despacho'
+      'monto_comision_huayca', 'monto_total', 'estado_pago', 'estado_despacho', 'codigo_descuento'
     ];
     const filas = pedidos.map((p) => [
       new Date(p.created_at).toISOString().slice(0, 10),
@@ -1071,7 +1072,8 @@ router.get('/reportes/pedidos.csv', async (req, res) => {
       p.monto_comision_huayca,
       p.monto_total,
       p.estado_pago,
-      p.estado_despacho
+      p.estado_despacho,
+      p.codigo_descuento_usado // vacío (csvValor trata null como '') si el pedido no usó ningún código
     ].map(csvValor).join(','));
 
     // BOM al inicio (﻿) para que Excel en Windows detecte UTF-8 solo
