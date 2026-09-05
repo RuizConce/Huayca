@@ -121,7 +121,29 @@ const MIGRACIONES_INCREMENTALES = [
   // por fecha de siempre).
   { tabla: 'productos', columna: 'destacado', definicion: 'destacado BOOLEAN NOT NULL DEFAULT false AFTER regiones_disponibles' },
   { tabla: 'productos', columna: 'destacado_hasta', definicion: 'destacado_hasta DATE NULL AFTER destacado' },
-  { tabla: 'productos', columna: 'destacado_desde', definicion: 'destacado_desde TIMESTAMP NULL AFTER destacado_hasta' }
+  { tabla: 'productos', columna: 'destacado_desde', definicion: 'destacado_desde TIMESTAMP NULL AFTER destacado_hasta' },
+  // Segundo desglose (códigos de descuento) — todos NULL/false por defecto,
+  // ningún producto existente queda afectado. precio_final_promo va al
+  // final a propósito: es una columna GENERATED nueva (no la redefinición
+  // de una ya existente, como pasó con precio_final/comisión Eliss — acá
+  // ensureColumn con un ADD COLUMN ... GENERATED ALWAYS AS (...) STORED
+  // alcanza), y tiene que crearse DESPUÉS de que sus 6 columnas
+  // dependientes ya existan (el array se procesa en orden).
+  { tabla: 'productos', columna: 'acepta_codigo_descuento', definicion: 'acepta_codigo_descuento BOOLEAN NOT NULL DEFAULT false AFTER destacado_desde' },
+  { tabla: 'productos', columna: 'descuento_monto', definicion: 'descuento_monto DECIMAL(10,0) NULL AFTER acepta_codigo_descuento' },
+  { tabla: 'productos', columna: 'precio_proveedor_promo', definicion: 'precio_proveedor_promo DECIMAL(10,0) NULL AFTER descuento_monto' },
+  { tabla: 'productos', columna: 'comision_afiliado_promo', definicion: 'comision_afiliado_promo DECIMAL(10,0) NULL AFTER precio_proveedor_promo' },
+  { tabla: 'productos', columna: 'comision_huayca_promo', definicion: 'comision_huayca_promo DECIMAL(10,0) NULL AFTER comision_afiliado_promo' },
+  { tabla: 'productos', columna: 'comision_eliss_promo', definicion: 'comision_eliss_promo DECIMAL(10,0) NULL AFTER comision_huayca_promo' },
+  { tabla: 'productos', columna: 'impuesto_incluido_promo', definicion: 'impuesto_incluido_promo BOOLEAN NULL AFTER comision_eliss_promo' },
+  { tabla: 'productos', columna: 'monto_impuesto_promo', definicion: 'monto_impuesto_promo DECIMAL(10,0) NULL AFTER impuesto_incluido_promo' },
+  {
+    tabla: 'productos', columna: 'precio_final_promo',
+    definicion: `precio_final_promo DECIMAL(10,0) GENERATED ALWAYS AS
+      (precio_proveedor_promo + comision_afiliado_promo + comision_huayca_promo + comision_eliss_promo +
+       (CASE WHEN impuesto_incluido_promo THEN 0 ELSE monto_impuesto_promo END)) STORED AFTER monto_impuesto_promo`
+  },
+  { tabla: 'pedidos', columna: 'codigo_descuento_usado', definicion: 'codigo_descuento_usado VARCHAR(50) NULL AFTER monto_impuesto' }
 ];
 
 // Las columnas de imagen partieron como VARCHAR(500) (pensadas para URLs) y
@@ -175,6 +197,18 @@ const TABLAS_INCREMENTALES = [
         PRIMARY KEY (producto_id, categoria_id),
         FOREIGN KEY (producto_id) REFERENCES productos(id) ON DELETE CASCADE,
         FOREIGN KEY (categoria_id) REFERENCES categorias(id) ON DELETE CASCADE
+      )
+    `
+  },
+  {
+    tabla: 'codigos_descuento',
+    createSql: `
+      CREATE TABLE codigos_descuento (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        codigo VARCHAR(50) NOT NULL UNIQUE,
+        activo BOOLEAN NOT NULL DEFAULT true,
+        veces_usado INT NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `
   }

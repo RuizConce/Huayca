@@ -349,6 +349,35 @@ function normalizarRegionesDisponibles(regiones) {
   return Array.isArray(regiones) && regiones.length ? JSON.stringify(regiones) : null;
 }
 
+// Segundo desglose (código de descuento): arma los 7 valores a guardar a
+// partir del body del request. Si acepta_codigo_descuento no viene
+// marcado, TODO queda NULL sin importar qué haya mandado el body — no
+// tiene sentido conservar un desglose promo "fantasma" para un producto
+// que no lo usa (y evita que, si se reactiva el checkbox más adelante sin
+// querer, aparezcan valores viejos que nadie revisó). Compartida entre
+// POST y PUT /productos para que ambas rutas apliquen la misma regla.
+function calcularCamposPromo(body) {
+  const acepta = !!body.acepta_codigo_descuento;
+  if (!acepta) {
+    return {
+      acepta_codigo_descuento: false, descuento_monto: null, precio_proveedor_promo: null,
+      comision_afiliado_promo: null, comision_huayca_promo: null, comision_eliss_promo: null,
+      impuesto_incluido_promo: null, monto_impuesto_promo: null
+    };
+  }
+  const impuestoIncluidoPromo = body.impuesto_incluido_promo !== false;
+  return {
+    acepta_codigo_descuento: true,
+    descuento_monto: body.descuento_monto ?? null,
+    precio_proveedor_promo: body.precio_proveedor_promo ?? null,
+    comision_afiliado_promo: body.comision_afiliado_promo ?? null,
+    comision_huayca_promo: body.comision_huayca_promo ?? null,
+    comision_eliss_promo: body.comision_eliss_promo ?? null,
+    impuesto_incluido_promo: impuestoIncluidoPromo,
+    monto_impuesto_promo: impuestoIncluidoPromo ? 0 : (body.monto_impuesto_promo ?? null)
+  };
+}
+
 router.post('/productos', async (req, res) => {
   try {
     const {
@@ -368,6 +397,7 @@ router.post('/productos', async (req, res) => {
     if (existe.length) slug = `${slug}-${Date.now().toString().slice(-4)}`;
 
     const destacadoNuevo = !!destacado;
+    const promo = calcularCamposPromo(req.body);
 
     // categorias: array de ids marcados en el panel (checkboxes, ya no un
     // solo <select>) — ver producto_categorias más abajo, esa es la fuente
@@ -382,15 +412,21 @@ router.post('/productos', async (req, res) => {
        (proveedor_id, categoria_id, nombre, slug, descripcion, imagen_principal, imagenes,
         precio_proveedor, comision_afiliado, comision_huayca, comision_eliss,
         impuesto_incluido, monto_impuesto, precio_normal, stock, garantia_meses, estado,
-        regiones_disponibles, destacado, destacado_hasta, destacado_desde)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        regiones_disponibles, destacado, destacado_hasta, destacado_desde,
+        acepta_codigo_descuento, descuento_monto, precio_proveedor_promo,
+        comision_afiliado_promo, comision_huayca_promo, comision_eliss_promo,
+        impuesto_incluido_promo, monto_impuesto_promo)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         proveedor_id, categoriaIdPrincipal, nombre, slug, descripcion || null, imagen_principal || null,
         JSON.stringify(imagenes || []), precio_proveedor, comision_afiliado || 0, comision_huayca || 0,
         comision_eliss || 0, impuesto_incluido !== false, monto_impuesto || 0,
         precio_normal || null, stock ?? 0, garantia_meses ?? 6, estado || 'borrador',
         normalizarRegionesDisponibles(regiones_disponibles),
-        destacadoNuevo, destacado_hasta || null, destacadoNuevo ? new Date() : null
+        destacadoNuevo, destacado_hasta || null, destacadoNuevo ? new Date() : null,
+        promo.acepta_codigo_descuento, promo.descuento_monto, promo.precio_proveedor_promo,
+        promo.comision_afiliado_promo, promo.comision_huayca_promo, promo.comision_eliss_promo,
+        promo.impuesto_incluido_promo, promo.monto_impuesto_promo
       ]
     );
     await sincronizarCategoriasProducto(result.insertId, categoriaIds);
@@ -425,6 +461,7 @@ router.put('/productos/:id', async (req, res) => {
     // sustituye NULL), pero se deja explícito por claridad y para no
     // depender de ese detalle.
     const destacadoNuevo = !!destacado;
+    const promo = calcularCamposPromo(req.body);
 
     // categorias: array de ids marcados en el panel (checkboxes) —
     // producto_categorias (sincronizada más abajo) es la fuente de verdad
@@ -474,7 +511,15 @@ router.put('/productos/:id', async (req, res) => {
          regiones_disponibles = ?,
          destacado = ?,
          destacado_hasta = ?,
-         destacado_desde = ?
+         destacado_desde = ?,
+         acepta_codigo_descuento = ?,
+         descuento_monto = ?,
+         precio_proveedor_promo = ?,
+         comision_afiliado_promo = ?,
+         comision_huayca_promo = ?,
+         comision_eliss_promo = ?,
+         impuesto_incluido_promo = ?,
+         monto_impuesto_promo = ?
        WHERE id = ?`,
       [
         categoriaIdPrincipal, nombre || null, descripcion || null, imagen_principal || null,
@@ -484,7 +529,10 @@ router.put('/productos/:id', async (req, res) => {
         precio_normal ?? null,
         stock ?? null, garantia_meses ?? null, estado || null,
         normalizarRegionesDisponibles(regiones_disponibles),
-        destacadoNuevo, destacado_hasta || null, destacadoDesde, req.params.id
+        destacadoNuevo, destacado_hasta || null, destacadoDesde,
+        promo.acepta_codigo_descuento, promo.descuento_monto, promo.precio_proveedor_promo,
+        promo.comision_afiliado_promo, promo.comision_huayca_promo, promo.comision_eliss_promo,
+        promo.impuesto_incluido_promo, promo.monto_impuesto_promo, req.params.id
       ]
     );
     if (!result.affectedRows) return res.status(404).json({ error: 'Producto no encontrado' });
@@ -543,6 +591,64 @@ router.delete('/productos/:id', async (req, res) => {
     res.status(500).json({ error: 'Error al eliminar el producto' });
   } finally {
     conn.release();
+  }
+});
+
+// -------------------------------------------------
+// CÓDIGOS DE DESCUENTO (genéricos — no atados a un producto puntual, ver
+// productos.acepta_codigo_descuento / desglose _promo más arriba. La
+// validación real al comprar vive en POST /api/codigos-descuento/validar,
+// público, y en POST /api/pedidos.)
+// -------------------------------------------------
+
+// GET /api/admin/codigos-descuento
+router.get('/codigos-descuento', async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT * FROM codigos_descuento ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al listar códigos de descuento' });
+  }
+});
+
+// POST /api/admin/codigos-descuento  Body: { codigo }
+// El texto se normaliza a mayúsculas/trim antes de guardar y de comparar
+// contra duplicados — así "vip10" y "VIP10" son el mismo código en vez de
+// dos filas distintas por un detalle de mayúsculas (la validación pública
+// en /api/codigos-descuento/validar normaliza igual antes de buscar).
+router.post('/codigos-descuento', async (req, res) => {
+  try {
+    const codigo = (req.body.codigo || '').trim().toUpperCase();
+    if (!codigo) return res.status(400).json({ error: 'codigo es requerido' });
+
+    const [existe] = await db.query('SELECT id FROM codigos_descuento WHERE codigo = ?', [codigo]);
+    if (existe.length) return res.status(409).json({ error: 'Ya existe un código con ese texto' });
+
+    const [result] = await db.query('INSERT INTO codigos_descuento (codigo) VALUES (?)', [codigo]);
+    res.status(201).json({ id: result.insertId, codigo });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'Ya existe un código con ese texto' });
+    console.error(err);
+    res.status(500).json({ error: 'Error al crear el código de descuento' });
+  }
+});
+
+// PATCH /api/admin/codigos-descuento/:id  Body: { activo }
+router.patch('/codigos-descuento/:id', async (req, res) => {
+  try {
+    if (typeof req.body.activo !== 'boolean') {
+      return res.status(400).json({ error: 'activo (boolean) es requerido' });
+    }
+    const [result] = await db.query(
+      'UPDATE codigos_descuento SET activo = ? WHERE id = ?',
+      [req.body.activo, req.params.id]
+    );
+    if (!result.affectedRows) return res.status(404).json({ error: 'Código no encontrado' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al actualizar el código de descuento' });
   }
 });
 

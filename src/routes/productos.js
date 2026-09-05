@@ -70,9 +70,17 @@ router.get('/:slug', async (req, res) => {
     );
     if (!rows.length) return res.status(404).json({ error: 'Producto no encontrado' });
 
-    // No exponer el desglose interno de comisión al público
+    // No exponer el desglose interno de comisión al público (ni el normal
+    // ni el _promo de códigos de descuento) — acepta_codigo_descuento SÍ
+    // se deja pasar, es lo que usa checkout.html para decidir si muestra
+    // el campo "¿Tienes un código?"; el precio con descuento en sí solo se
+    // entrega recién al validar un código real (POST
+    // /api/codigos-descuento/validar), nunca de entrada.
     const { precio_proveedor, comision_afiliado, comision_huayca, comision_eliss,
-      impuesto_incluido, monto_impuesto, ...producto } = rows[0];
+      impuesto_incluido, monto_impuesto,
+      descuento_monto, precio_proveedor_promo, comision_afiliado_promo, comision_huayca_promo,
+      comision_eliss_promo, impuesto_incluido_promo, monto_impuesto_promo, precio_final_promo,
+      ...producto } = rows[0];
     await adjuntarCategorias([producto]);
     res.json(producto);
   } catch (err) {

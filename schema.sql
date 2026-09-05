@@ -83,6 +83,24 @@ CREATE TABLE productos (
   destacado BOOLEAN NOT NULL DEFAULT false,
   destacado_hasta DATE NULL,
   destacado_desde TIMESTAMP NULL,
+  -- Segundo desglose de precio, ARMADO A MANO por Cristian (no calculado
+  -- proporcional ni automático), para cuando se compra con un código de
+  -- descuento (ver tabla codigos_descuento — los códigos son genéricos, no
+  -- están atados a un producto: cualquier código sirve para cualquier
+  -- producto que tenga acepta_codigo_descuento=true). Todos estos campos
+  -- quedan NULL si acepta_codigo_descuento=false — no tiene sentido un
+  -- desglose promo para un producto que no acepta códigos.
+  acepta_codigo_descuento BOOLEAN NOT NULL DEFAULT false,
+  descuento_monto DECIMAL(10,0) NULL, -- solo informativo/visual para el admin, no se usa para calcular nada
+  precio_proveedor_promo DECIMAL(10,0) NULL,
+  comision_afiliado_promo DECIMAL(10,0) NULL,
+  comision_huayca_promo DECIMAL(10,0) NULL,
+  comision_eliss_promo DECIMAL(10,0) NULL,
+  impuesto_incluido_promo BOOLEAN NULL,
+  monto_impuesto_promo DECIMAL(10,0) NULL,
+  precio_final_promo DECIMAL(10,0) GENERATED ALWAYS AS
+    (precio_proveedor_promo + comision_afiliado_promo + comision_huayca_promo + comision_eliss_promo +
+     (CASE WHEN impuesto_incluido_promo THEN 0 ELSE monto_impuesto_promo END)) STORED,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (proveedor_id) REFERENCES proveedores(id),
@@ -102,6 +120,22 @@ CREATE TABLE producto_categorias (
   PRIMARY KEY (producto_id, categoria_id),
   FOREIGN KEY (producto_id) REFERENCES productos(id) ON DELETE CASCADE,
   FOREIGN KEY (categoria_id) REFERENCES categorias(id) ON DELETE CASCADE
+);
+
+-- -------------------------------------------------
+-- CÓDIGOS DE DESCUENTO
+-- Genéricos: no están atados a un producto específico — sirven para
+-- CUALQUIER producto con acepta_codigo_descuento=true (ver productos
+-- arriba). Sin límite de cantidad ni de usos por código, sin vencimiento
+-- (a menos que se pida más adelante); veces_usado es puramente
+-- informativo, no bloquea nada por sí solo — solo `activo=false` lo hace.
+-- -------------------------------------------------
+CREATE TABLE codigos_descuento (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  codigo VARCHAR(50) NOT NULL UNIQUE,
+  activo BOOLEAN NOT NULL DEFAULT true,
+  veces_usado INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- -------------------------------------------------
@@ -177,6 +211,13 @@ CREATE TABLE pedidos (
   monto_comision_eliss DECIMAL(10,0) NOT NULL DEFAULT 0,
   monto_impuesto DECIMAL(10,0) NOT NULL DEFAULT 0,
   monto_total DECIMAL(10,0) NOT NULL,
+
+  -- NULL = se compró sin código (o el código no era válido, mismo efecto:
+  -- se congelaron los montos normales arriba). Trazabilidad para reportes,
+  -- no hay FK a codigos_descuento a propósito (un código puede desactivarse
+  -- o, en teoría, no existir más adelante, y el pedido histórico tiene que
+  -- seguir mostrando qué texto de código se usó igual).
+  codigo_descuento_usado VARCHAR(50) NULL,
 
   cantidad INT DEFAULT 1,
 

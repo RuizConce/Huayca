@@ -195,6 +195,35 @@
       <label>Monto de impuesto ($)</label>
       <input id="productoMontoImpuesto" type="number" oninput="actualizarPreview()">
     </div>
+    <label style="display:flex; align-items:center; gap:8px; margin-top:16px;">
+      <input type="checkbox" id="productoAceptaCodigo" style="width:auto;" onchange="toggleAceptaCodigo()">
+      Acepta código de descuento
+    </label>
+    <div id="bloqueCodigoDescuento" class="hidden" style="margin-top:8px; padding:10px; background:#f4f5f2; border-radius:8px;">
+      <small style="display:block; margin-bottom:8px; color:#888;">Desglose ALTERNATIVO para cuando se usa un código — lo definís vos a mano, no se calcula automático a partir del normal.</small>
+      <label style="margin-top:0;">Monto de descuento ($) <small style="font-weight:400; color:#999;">— solo informativo</small></label>
+      <input id="productoDescuentoMonto" type="number" oninput="actualizarPreviewPromo()">
+      <label>Precio proveedor (promo) ($)</label>
+      <input id="productoPrecioProveedorPromo" type="number" oninput="actualizarPreviewPromo()">
+      <label>Comisión organización (promo) ($)</label>
+      <input id="productoComisionAfiliadoPromo" type="number" oninput="actualizarPreviewPromo()">
+      <label>Comisión Huayca (promo) ($)</label>
+      <input id="productoComisionHuaycaPromo" type="number" oninput="actualizarPreviewPromo()">
+      <label>Comisión Eliss (promo) ($)</label>
+      <input id="productoComisionElissPromo" type="number" oninput="actualizarPreviewPromo()">
+      <label style="display:flex; align-items:center; gap:8px; margin-top:12px;">
+        <input type="checkbox" id="productoImpuestoIncluidoPromo" style="width:auto;" checked onchange="toggleImpuestoPromo()">
+        ¿El precio proveedor (promo) ya incluye impuesto?
+      </label>
+      <div id="bloqueImpuestoPromo" class="hidden">
+        <label>Monto de impuesto (promo) ($)</label>
+        <input id="productoMontoImpuestoPromo" type="number" oninput="actualizarPreviewPromo()">
+      </div>
+      <div class="precio-final-preview" style="margin-top:10px;">
+        Precio final con código: <b id="precioFinalPromoPreview">$0</b>
+      </div>
+      <small id="diferenciaPromoPreview" style="display:block; margin-top:6px; color:#888;"></small>
+    </div>
     <label>Precio normal / referencia ($) — opcional</label>
     <input id="productoPrecioNormal" type="number">
     <label>Stock</label>
@@ -570,6 +599,55 @@ function toggleImpuesto() {
   actualizarPreview();
 }
 
+// ---------- Segundo desglose (código de descuento) — ver Parte A/C del
+// encargo: es un desglose ALTERNATIVO que Cristian arma a mano, no un
+// cálculo proporcional a partir del normal. ----------
+function toggleAceptaCodigo() {
+  const activo = document.getElementById('productoAceptaCodigo').checked;
+  document.getElementById('bloqueCodigoDescuento').classList.toggle('hidden', !activo);
+  if (activo) actualizarPreviewPromo();
+}
+
+function toggleImpuestoPromo() {
+  const incluido = document.getElementById('productoImpuestoIncluidoPromo').checked;
+  document.getElementById('bloqueImpuestoPromo').classList.toggle('hidden', incluido);
+  if (incluido) document.getElementById('productoMontoImpuestoPromo').value = '';
+  actualizarPreviewPromo();
+}
+
+// Recalcula "Precio final con código" y, como ayuda visual (no
+// bloqueante), la diferencia real vs. el precio normal comparada contra
+// el "Monto de descuento" que Cristian ingresó a mano — para que note si
+// no calzan, sin impedirle guardar igual si prefiere dejarlo así.
+function actualizarPreviewPromo() {
+  if (!document.getElementById('productoAceptaCodigo').checked) return;
+  const pp = Number(document.getElementById('productoPrecioProveedorPromo').value) || 0;
+  const ca = Number(document.getElementById('productoComisionAfiliadoPromo').value) || 0;
+  const ch = Number(document.getElementById('productoComisionHuaycaPromo').value) || 0;
+  const ce = Number(document.getElementById('productoComisionElissPromo').value) || 0;
+  const impuestoIncluidoPromo = document.getElementById('productoImpuestoIncluidoPromo').checked;
+  const mi = impuestoIncluidoPromo ? 0 : (Number(document.getElementById('productoMontoImpuestoPromo').value) || 0);
+  const totalPromo = pp + ca + ch + ce + mi;
+  document.getElementById('precioFinalPromoPreview').textContent = '$' + totalPromo.toLocaleString('es-CL');
+
+  const ppN = Number(document.getElementById('productoPrecioProveedor').value) || 0;
+  const caN = Number(document.getElementById('productoComisionAfiliado').value) || 0;
+  const chN = Number(document.getElementById('productoComisionHuayca').value) || 0;
+  const ceN = Number(document.getElementById('productoComisionEliss').value) || 0;
+  const impuestoIncluidoNormal = document.getElementById('productoImpuestoIncluido').checked;
+  const miN = impuestoIncluidoNormal ? 0 : (Number(document.getElementById('productoMontoImpuesto').value) || 0);
+  const totalNormal = ppN + caN + chN + ceN + miN;
+
+  const diferenciaReal = totalNormal - totalPromo;
+  const descuentoIngresado = Number(document.getElementById('productoDescuentoMonto').value) || 0;
+  const calzan = diferenciaReal === descuentoIngresado;
+  document.getElementById('diferenciaPromoPreview').innerHTML =
+    `Diferencia real (normal − promo): <b>$${diferenciaReal.toLocaleString('es-CL')}</b>` +
+    (descuentoIngresado
+      ? ` · Monto de descuento ingresado: $${descuentoIngresado.toLocaleString('es-CL')} ${calzan ? '✅ calzan' : '⚠️ no calzan exacto (tu decisión, no bloquea el guardado)'}`
+      : '');
+}
+
 function marcarRegiones(regiones) {
   armarChecksRegiones();
   const set = new Set(regiones || []);
@@ -587,13 +665,17 @@ function leerRegionesSeleccionadas() {
 function abrirModalProducto() {
   document.getElementById('modalProductoTitulo').textContent = 'Nuevo producto';
   document.getElementById('productoId').value = '';
-  ['productoNombre','productoDescripcion','productoImagen','productoPrecioProveedor','productoComisionAfiliado','productoComisionHuayca','productoComisionEliss','productoMontoImpuesto','productoPrecioNormal','productoDestacadoHasta'].forEach(id => document.getElementById(id).value = '');
+  ['productoNombre','productoDescripcion','productoImagen','productoPrecioProveedor','productoComisionAfiliado','productoComisionHuayca','productoComisionEliss','productoMontoImpuesto','productoPrecioNormal','productoDestacadoHasta','productoDescuentoMonto','productoPrecioProveedorPromo','productoComisionAfiliadoPromo','productoComisionHuaycaPromo','productoComisionElissPromo','productoMontoImpuestoPromo'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('productoStock').value = 0;
   document.getElementById('productoEstado').value = 'borrador';
   document.getElementById('productoImpuestoIncluido').checked = true;
   document.getElementById('bloqueImpuesto').classList.add('hidden');
   document.getElementById('productoDestacado').checked = false;
   document.getElementById('bloqueDestacadoHasta').classList.add('hidden');
+  document.getElementById('productoAceptaCodigo').checked = false;
+  document.getElementById('bloqueCodigoDescuento').classList.add('hidden');
+  document.getElementById('productoImpuestoIncluidoPromo').checked = true;
+  document.getElementById('bloqueImpuestoPromo').classList.add('hidden');
   marcarCategorias([]);
   document.getElementById('bloqueNuevaCategoria').classList.add('hidden');
   actualizarPreview();
@@ -630,6 +712,23 @@ function editarProducto(p) {
   document.getElementById('productoDestacado').checked = destacadoActivo;
   document.getElementById('bloqueDestacadoHasta').classList.toggle('hidden', !destacadoActivo);
   document.getElementById('productoDestacadoHasta').value = p.destacado_hasta || '';
+
+  const aceptaCodigo = !!p.acepta_codigo_descuento;
+  document.getElementById('productoAceptaCodigo').checked = aceptaCodigo;
+  document.getElementById('bloqueCodigoDescuento').classList.toggle('hidden', !aceptaCodigo);
+  document.getElementById('productoDescuentoMonto').value = p.descuento_monto ?? '';
+  document.getElementById('productoPrecioProveedorPromo').value = p.precio_proveedor_promo ?? '';
+  document.getElementById('productoComisionAfiliadoPromo').value = p.comision_afiliado_promo ?? '';
+  document.getElementById('productoComisionHuaycaPromo').value = p.comision_huayca_promo ?? '';
+  document.getElementById('productoComisionElissPromo').value = p.comision_eliss_promo ?? '';
+  // Si el producto nunca tuvo desglose promo, impuesto_incluido_promo
+  // llega null — se muestra igual que el default del normal (marcado)
+  // para que el formulario arranque en un estado usable.
+  const impuestoIncluidoPromo = p.impuesto_incluido_promo === false ? false : true;
+  document.getElementById('productoImpuestoIncluidoPromo').checked = impuestoIncluidoPromo;
+  document.getElementById('bloqueImpuestoPromo').classList.toggle('hidden', impuestoIncluidoPromo);
+  document.getElementById('productoMontoImpuestoPromo').value = p.monto_impuesto_promo ?? '';
+
   actualizarPreview();
   actualizarPreviewImagen('productoImagen', 'previewProductoImagen', 'dimProductoImagen');
   marcarRegiones(p.regiones_disponibles);
@@ -701,6 +800,7 @@ function actualizarPreview() {
   const impuestoIncluido = document.getElementById('productoImpuestoIncluido').checked;
   const mi = impuestoIncluido ? 0 : (Number(document.getElementById('productoMontoImpuesto').value) || 0);
   document.getElementById('precioFinalPreview').textContent = '$' + (pp + ca + ch + ce + mi).toLocaleString('es-CL');
+  actualizarPreviewPromo(); // la diferencia normal-vs-promo depende también de estos campos
 }
 
 async function guardarProducto() {
@@ -726,7 +826,17 @@ async function guardarProducto() {
     destacado: document.getElementById('productoDestacado').checked,
     destacado_hasta: document.getElementById('productoDestacado').checked
       ? (document.getElementById('productoDestacadoHasta').value || null)
-      : null
+      : null,
+    acepta_codigo_descuento: document.getElementById('productoAceptaCodigo').checked,
+    descuento_monto: Number(document.getElementById('productoDescuentoMonto').value) || null,
+    precio_proveedor_promo: Number(document.getElementById('productoPrecioProveedorPromo').value) || null,
+    comision_afiliado_promo: Number(document.getElementById('productoComisionAfiliadoPromo').value) || null,
+    comision_huayca_promo: Number(document.getElementById('productoComisionHuaycaPromo').value) || null,
+    comision_eliss_promo: Number(document.getElementById('productoComisionElissPromo').value) || null,
+    impuesto_incluido_promo: document.getElementById('productoImpuestoIncluidoPromo').checked,
+    monto_impuesto_promo: document.getElementById('productoImpuestoIncluidoPromo').checked
+      ? 0
+      : (Number(document.getElementById('productoMontoImpuestoPromo').value) || null)
   };
   if (!payload.nombre) { mostrarError('El nombre del producto es obligatorio'); return; }
   try {

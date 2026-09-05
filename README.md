@@ -15,7 +15,9 @@ src/middleware/auth.js         → JWT para organizaciones/admin
 src/services/pagos.service.js  → aprobar/rechazar pago de un pedido (activa comisiones, devuelve stock)
 src/routes/productos.js        → catálogo público + categorías
 src/routes/organizaciones.js   → registro, login, dashboard de comisiones
-src/routes/pedidos.js          → creación de pedido (reserva stock, resuelve atribución del link)
+src/routes/pedidos.js          → creación de pedido (reserva stock, resuelve atribución del link, aplica código de descuento si corresponde)
+src/routes/codigosDescuento.js → POST /api/codigos-descuento/validar (público, sin auth)
+src/services/categorias.service.js → adjuntarCategorias() / sincronizarCategoriasProducto() (compartido entre productos.js y admin.js)
 src/routes/pagos.js            → preferencia de pago y webhook de Mercado Pago
 src/routes/liquidaciones.js    → solicitud (organización) y aprobación/pago (admin)
 src/routes/tickets.js          → devoluciones/garantías
@@ -30,6 +32,7 @@ public/admin-pedidos.html       → pestaña "Pedidos": listado filtrable + marc
 public/admin-logistica.html     → pestaña "Logística": pedidos aprobados pendientes de despacho, agrupados por proveedor
 public/admin-actividad.html     → pestaña "Actividad": dashboard del embudo de conversión (eventos_actividad)
 public/admin-ventas.html        → pestaña "Ventas": resumen financiero + rankings + export CSV
+public/admin-codigos.html       → pestaña "Códigos de descuento": listar/crear/activar-desactivar códigos genéricos
 public/admin-sincronizar-pago.html → pestaña "Sincronizar pago": plan B manual, consulta y sincroniza un pago contra Mercado Pago
 public/admin-configuracion.html → pestaña "Configuración": email/nombre y cambio de contraseña del admin
 public/index.html, catalogo.html, producto.html, checkout.html, pago-resultado.html,
@@ -53,6 +56,8 @@ El punto de entrada único es **`public/admin-panel.html`** — un shell con log
 
 La fuente de verdad real es `producto_categorias` (tabla M:N, `PRIMARY KEY (producto_id, categoria_id)`, ambas FK con `ON DELETE CASCADE`). Migrar una base existente copia el `categoria_id` que cada producto ya tenía a `producto_categorias` como su categoría inicial (`INSERT IGNORE ... SELECT id, categoria_id FROM productos WHERE categoria_id IS NOT NULL`, en `src/db/migrate.js`) — ningún producto pierde su categoría con este cambio. `src/services/categorias.service.js` centraliza el `adjuntarCategorias()` que arma el array `categorias: [{id,nombre,slug,icono}, ...]` en cada respuesta (público y admin) y el `sincronizarCategoriasProducto()` que usa el guardado del panel.
 
+**Segundo desglose (código de descuento):** checkbox "Acepta código de descuento" que revela el campo informativo "Monto de descuento" más los 5 campos `_promo` (precio proveedor, comisión organización, comisión Huayca, comisión Eliss, e impuesto incluido/monto) — mismos nombres y mismo patrón que el desglose normal, pero un formulario aparte que Cristian llena a mano (nunca se calcula a partir del normal). El preview "Precio final con código" se recalcula en vivo, junto con la diferencia real vs. el precio normal comparada contra el "Monto de descuento" ingresado — es solo una ayuda visual, no bloquea el guardado si no coinciden exacto. Ver "Códigos de descuento" más abajo para el resto del flujo (checkout, backend, tabla de códigos).
+
 **Oferta destacada:** checkbox "Marcar como oferta destacada (se ancla arriba)" + un campo de fecha opcional "Destacar hasta" que aparece al marcarlo (vacío = anclado sin vencimiento, hasta que se desmarque a mano) — ver "Ofertas ancladas" más abajo para la lógica de orden. El listado de productos de cada marca muestra un badge `📌 Destacado` (o `📌 Destacado hasta DD/MM` si tiene fecha) en los que están anclados **activos** ahora mismo — uno cuya fecha ya venció deja de mostrar el badge aunque el checkbox interno siga marcado, mismo criterio que usa el `ORDER BY` del catálogo.
 
 **Restricción de productos por región:** al crear/editar un producto hay un checkbox "¿Este producto tiene restricción de región?"; si se activa, aparece un multi-select con las 16 regiones de Chile (mismo dataset que el checkout, ver más abajo) para elegir dónde se despacha. Se guarda en `productos.regiones_disponibles` (columna JSON). El formulario siempre reenvía el estado completo, así que `PUT /api/admin/productos/:id` escribe esa columna sin `COALESCE` (a diferencia del resto de los campos del UPDATE) — si no lo hiciera así, sería imposible quitarle la restricción a un producto una vez puesta, porque `COALESCE(?, valor_actual)` nunca deja pasar un `null` explícito.
@@ -70,6 +75,7 @@ HTML/CSS/JS plano, sin build step, mismo patrón que `admin.html` — servido po
 **Imagen de producto:** `index.html` (destacados), `catalogo.html` y el resumen de `checkout.html` muestran `imagen_principal` cuando el producto tiene una (mismo patrón que `producto.html`: `<img>` si hay imagen, si no el emoji de `Huayca.iconoProducto()` como placeholder) — antes, esas tres vistas ignoraban `imagen_principal` y siempre mostraban el emoji aunque el producto tuviera una foto real subida desde el admin, el mismo tipo de bug ya visto una vez con el logo del header.
 - **`checkout.html?slug=X`** — formulario de datos + resumen, `POST /api/pedidos`, y a continuación `POST /api/pagos/preferencia` para redirigir al comprador a pagar en Mercado Pago (`sandbox_init_point` mientras `MP_ACCESS_TOKEN` sea de prueba). Si `MP_ACCESS_TOKEN` no está configurado o falla la creación de la preferencia, no se corta el flujo: cae a la pantalla de confirmación de siempre ("pedido registrado, pendiente de pago"). Mercado Pago redirige de vuelta a `pago-resultado.html?pedido=...` (ver sección de comisiones más abajo).
   Nombre, email, teléfono, calle, número, región y comuna son obligatorios (depto/referencia sigue siendo opcional): el botón "Confirmar pedido" arranca deshabilitado y se re-evalúa en cada cambio del formulario, y `POST /api/pedidos` repite la misma validación en el backend (400 con el detalle de qué campo falta) porque el frontend nunca es la única línea de defensa. Región y comuna son selects en cascada — la comuna queda deshabilitada y vacía hasta elegir región — poblados desde `public/js/chile-regiones-comunas.js`, un dataset propio con las 16 regiones oficiales de Chile (orden geográfico norte→sur, post-2018 con Región de Ñuble ya separada de Biobío) y sus ~346 comunas, expuesto como `<script>` global (`CHILE_REGIONES`) y también vía `require()` para que el backend valide contra los mismos nombres. Si el producto tiene `regiones_disponibles` (ver panel de admin arriba), elegir una región no incluida en esa lista bloquea el botón y muestra "Este producto no está disponible para envío a [región]. Regiones disponibles: [...]"; `POST /api/pedidos` repite este chequeo del lado del servidor antes de crear el pedido.
+  Si el producto tiene `acepta_codigo_descuento=true`, aparece un campo opcional "¿Tienes un código de descuento?" con botón "Aplicar" (`POST /api/codigos-descuento/validar`, público) que, si el código es válido, recalcula el resumen al `precio_final_promo` en vivo — un código inválido solo muestra un error, nunca bloquea el resto del checkout. Ver "Códigos de descuento" más abajo.
 - **`organizaciones.html`** — buscador/listado público de organizaciones aprobadas (`GET /api/organizaciones?q=`), para el botón "Buscar organización".
 - **`organizacion-registro.html` / `organizacion-login.html` / `organizacion-dashboard.html`** — alta, login y dashboard de comisiones + link para compartir, usando las rutas ya documentadas más abajo. El dashboard está organizado en 2 pestañas (mismo patrón shell-liviano del admin, pero sin iframes: acá todo el contenido ya vive en una sola página, así que cambiar de pestaña es puro mostrar/ocultar dos `<div>` vía JS — ambas ya están armadas en el DOM desde la carga inicial, no hay un segundo fetch al cambiar):
   - **"Mis comisiones"** (la que ya existía) — saldo disponible, total generado, total pagado, ventas realizadas, el link único para compartir, y "Últimas comisiones" (pedido/monto/estado/fecha).
@@ -132,7 +138,25 @@ precio_final = precio_proveedor + comision_afiliado + comision_huayca + comision
 
 Estos montos los define Huayca al crear/editar el producto (`/api/admin/productos`, con los campos correspondientes en el formulario de `admin.html` — comisión Eliss, el checkbox de impuesto y el campo condicional de monto); la organización nunca puede editarlos ni verlos completos (ver más abajo, "catálogo con comisiones").
 
-**Nunca se expone al público:** `GET /api/productos/:slug` saca `precio_proveedor`, `comision_afiliado`, `comision_huayca`, `comision_eliss`, `impuesto_incluido` y `monto_impuesto` de la respuesta antes de mandarla — el catálogo público y `producto.html` solo ven `precio_final`. `GET /api/admin/productos/desglose` (auth admin) sí devuelve el desglose completo de todos los productos activos, para la sub-pestaña "Desglose de productos" dentro de la pestaña Ventas del panel (`admin-ventas.html`).
+**Nunca se expone al público:** `GET /api/productos/:slug` saca `precio_proveedor`, `comision_afiliado`, `comision_huayca`, `comision_eliss`, `impuesto_incluido`, `monto_impuesto` y todo el desglose `_promo` (ver abajo) de la respuesta antes de mandarla — el catálogo público y `producto.html` solo ven `precio_final` (y `acepta_codigo_descuento`, que sí se deja pasar). `GET /api/admin/productos/desglose` (auth admin) sí devuelve el desglose completo de todos los productos activos, para la sub-pestaña "Desglose de productos" dentro de la pestaña Ventas del panel (`admin-ventas.html`).
+
+## Códigos de descuento (segundo desglose, armado a mano)
+
+No es un descuento proporcional ni calculado — es un **segundo desglose completo** que Cristian arma campo por campo para cuando el cliente usa un código, totalmente independiente del normal:
+
+```
+precio_final_promo = precio_proveedor_promo + comision_afiliado_promo + comision_huayca_promo + comision_eliss_promo
+                      + (impuesto_incluido_promo ? 0 : monto_impuesto_promo)
+```
+
+- `productos.acepta_codigo_descuento` (default `false`) habilita el segundo desglose para ese producto — si es `false`, las 7 columnas `_promo`/`descuento_monto` quedan `NULL` (el backend las fuerza a `NULL` en cada guardado si el checkbox está desmarcado, sin importar qué haya mandado el body).
+- `descuento_monto` es puramente informativo (cuánto se rebaja en total) — no se usa para calcular nada; el admin muestra la diferencia real (`precio_final − precio_final_promo`) al lado para que Cristian note si no calzan, pero no bloquea el guardado si no coinciden.
+- Los **códigos en sí son genéricos** (tabla `codigos_descuento`: `codigo`, `activo`, `veces_usado` informativo, sin vencimiento ni límite de usos salvo desactivarlo a mano) — sirven para *cualquier* producto con `acepta_codigo_descuento=true`, no están atados a uno en particular. Pestaña "Códigos de descuento" del panel (`admin-codigos.html`): listar, crear (`POST /api/admin/codigos-descuento`, normaliza a mayúsculas/trim para que "vip10" y "VIP10" sean el mismo código) y activar/desactivar (`PATCH .../:id`).
+
+**Flujo de compra:**
+1. `checkout.html` muestra el campo "¿Tienes un código de descuento?" solo si el producto tiene `acepta_codigo_descuento=true`. Al aplicar, llama `POST /api/codigos-descuento/validar` (público, sin auth) con `{ codigo, producto_id }`; si es válido devuelve `precio_final_promo` y el resumen se actualiza en vivo. Un código inválido/inactivo/de un producto que no lo acepta **no bloquea nada** — se muestra el error y la compra sigue al precio normal.
+2. `POST /api/pedidos` vuelve a validar el código del lado del servidor (nunca confía en que el checkout ya lo validó) y, si es válido, congela los montos del pedido a partir del desglose `_promo` **completo** en vez del normal — nunca se mezclan campos de los dos. Si el código no viene, no existe, está inactivo, o el producto no acepta códigos, se congela con los valores normales de siempre (cero cambio de comportamiento para todo lo que no usa códigos).
+3. `pedidos.codigo_descuento_usado` (`NULL` si no se usó ninguno) queda como trazabilidad; `codigos_descuento.veces_usado` se incrementa apenas el pedido se crea (no espera a que el pago se apruebe, para mantenerlo simple — un código "usado" es uno con el que alguien completó un checkout).
 
 Flujo de un pedido:
 
@@ -218,6 +242,7 @@ Todo bajo `/api/admin` requiere `POST /api/admin/login` primero (tabla `administ
 - Actividad: `GET /actividad?desde=&hasta=` (ver sección de arriba).
 - Reportes/ventas: `GET /reportes/resumen?desde=&hasta=&proveedor_id=&organizacion_id=`, `GET /reportes/pedidos.csv?...` (ver sección de arriba).
 - Perfil propio: `GET/PUT /me`, `PUT /me/password`.
+- Códigos de descuento: `GET/POST /codigos-descuento`, `PATCH /codigos-descuento/:id` (body `{ activo }`).
 
 ## Variables de entorno
 

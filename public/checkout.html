@@ -67,6 +67,17 @@ let productoActual = null;
 let cantidadActual = 1;
 let organizacionIdActual = null; // resuelta una vez en cargarCheckout, reusada en enviarPedido
 
+// Código de descuento (opcional, solo si productoActual.acepta_codigo_descuento):
+// null mientras no se aplicó ninguno o el último intento fue inválido —
+// en ambos casos se compra al precio normal, exactamente como si el
+// campo no existiera.
+let codigoDescuentoAplicado = null;
+let precioFinalPromoAplicado = null;
+
+function precioUnitarioEfectivo() {
+  return codigoDescuentoAplicado ? precioFinalPromoAplicado : Number(productoActual.precio_final);
+}
+
 // Campos que public/checkout.html exige completos antes de dejar
 // confirmar — ver también la MISMA validación (nunca hay que confiar solo
 // en el frontend) en POST /api/pedidos, src/routes/pedidos.js.
@@ -74,7 +85,7 @@ const CAMPOS_REQUERIDOS = ['cNombre', 'cEmail', 'cTelefono', 'dCalle', 'dNumero'
 
 function renderResumen() {
   const p = productoActual;
-  const total = Number(p.precio_final) * cantidadActual;
+  const total = precioUnitarioEfectivo() * cantidadActual;
   return `
     <div class="resumen-card">
       <h3>Resumen del pedido</h3>
@@ -82,7 +93,7 @@ function renderResumen() {
         <div class="icono">${p.imagen_principal ? `<img src="${p.imagen_principal}" alt="${p.nombre}">` : Huayca.iconoProducto(p)}</div>
         <div>
           <b>${p.nombre}</b>
-          <span style="font-size:12px;color:var(--text-soft);">${Huayca.formatoCLP(p.precio_final)} c/u</span>
+          <span style="font-size:12px;color:var(--text-soft);" id="precioUnitarioTexto">${Huayca.formatoCLP(p.precio_final)} c/u</span>
         </div>
       </div>
       <div class="resumen-linea">
@@ -93,6 +104,16 @@ function renderResumen() {
           <button type="button" id="btnMas" class="btn btn-sm btn-outline" style="padding:2px 10px;">+</button>
         </span>
       </div>
+      ${p.acepta_codigo_descuento ? `
+        <div class="campo" style="margin:14px 0 4px;">
+          <label style="font-size:13px;">¿Tienes un código de descuento?</label>
+          <div style="display:flex; gap:8px;">
+            <input id="inputCodigoDescuento" placeholder="Ej: VERANO2026" style="flex:1;">
+            <button type="button" class="btn btn-sm btn-navy" id="btnCodigoAccion" style="white-space:nowrap;">Aplicar</button>
+          </div>
+          <div id="mensajeCodigoDescuento" class="form-msg hidden"></div>
+        </div>
+      ` : ''}
       <div class="resumen-linea"><span>Subtotal</span><span id="resumenSubtotal">${Huayca.formatoCLP(total)}</span></div>
       <div class="resumen-linea total"><span>Total</span><span id="resumenTotal">${Huayca.formatoCLP(total)}</span></div>
       <p style="font-size:12px;color:var(--text-soft);margin-top:10px;">
@@ -103,10 +124,73 @@ function renderResumen() {
 }
 
 function actualizarResumenTotales() {
-  const total = Number(productoActual.precio_final) * cantidadActual;
+  const total = precioUnitarioEfectivo() * cantidadActual;
   document.getElementById('cantidadTexto').textContent = cantidadActual;
   document.getElementById('resumenSubtotal').textContent = Huayca.formatoCLP(total);
   document.getElementById('resumenTotal').textContent = Huayca.formatoCLP(total);
+  const precioUnitarioEl = document.getElementById('precioUnitarioTexto');
+  if (precioUnitarioEl) precioUnitarioEl.textContent = Huayca.formatoCLP(precioUnitarioEfectivo()) + ' c/u';
+}
+
+// ---------- Código de descuento (opcional) ----------
+function mostrarMensajeCodigo(texto, tipo) {
+  const el = document.getElementById('mensajeCodigoDescuento');
+  el.textContent = texto;
+  el.className = 'form-msg ' + tipo;
+}
+
+// Un código inválido/inactivo/etc. NUNCA bloquea el resto de la compra:
+// solo se avisa con un mensaje y el cliente sigue con el precio normal,
+// como si no hubiera escrito nada.
+async function aplicarCodigoDescuento() {
+  const input = document.getElementById('inputCodigoDescuento');
+  const codigo = input.value.trim();
+  if (!codigo) { mostrarMensajeCodigo('Escribí un código antes de aplicar.', 'error'); return; }
+  const boton = document.getElementById('btnCodigoAccion');
+  boton.disabled = true;
+  try {
+    const resultado = await Huayca.apiFetch('/api/codigos-descuento/validar', {
+      method: 'POST',
+      body: JSON.stringify({ codigo, producto_id: productoActual.id })
+    });
+    if (!resultado.valido) {
+      mostrarMensajeCodigo(resultado.error || 'Ese código no es válido.', 'error');
+      return;
+    }
+    codigoDescuentoAplicado = codigo;
+    precioFinalPromoAplicado = Number(resultado.precio_final_promo);
+    input.disabled = true;
+    boton.textContent = 'Quitar';
+    mostrarMensajeCodigo(`✓ Código "${codigo}" aplicado — nuevo precio: ${Huayca.formatoCLP(precioFinalPromoAplicado)} c/u.`, 'ok');
+    actualizarResumenTotales();
+  } catch (e) {
+    mostrarMensajeCodigo('No se pudo validar el código, intenta de nuevo.', 'error');
+  } finally {
+    boton.disabled = false;
+  }
+}
+
+function quitarCodigoDescuento() {
+  codigoDescuentoAplicado = null;
+  precioFinalPromoAplicado = null;
+  const input = document.getElementById('inputCodigoDescuento');
+  input.disabled = false;
+  input.value = '';
+  document.getElementById('btnCodigoAccion').textContent = 'Aplicar';
+  document.getElementById('mensajeCodigoDescuento').className = 'form-msg hidden';
+  actualizarResumenTotales();
+}
+
+function wireCodigoDescuento() {
+  const boton = document.getElementById('btnCodigoAccion');
+  if (!boton) return; // el producto no acepta códigos, el bloque ni se renderizó
+  boton.addEventListener('click', () => {
+    if (codigoDescuentoAplicado) quitarCodigoDescuento();
+    else aplicarCodigoDescuento();
+  });
+  document.getElementById('inputCodigoDescuento').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); if (!codigoDescuentoAplicado) aplicarCodigoDescuento(); }
+  });
 }
 
 function wireCantidad() {
@@ -230,6 +314,7 @@ async function cargarCheckout() {
     cont.innerHTML = renderFormulario() + renderResumen();
     wireCantidad();
     wireFormulario();
+    wireCodigoDescuento();
 
     document.getElementById('formCheckout').addEventListener('submit', enviarPedido);
 
@@ -277,6 +362,7 @@ async function enviarPedido(e) {
     }
   };
   if (orgSlug) payload.organizacion_slug = orgSlug;
+  if (codigoDescuentoAplicado) payload.codigo_descuento = codigoDescuentoAplicado;
 
   btn.disabled = true;
   btn.textContent = 'Enviando…';

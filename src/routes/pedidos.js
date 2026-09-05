@@ -16,7 +16,7 @@ function generarCodigoPedido(id) {
 router.post('/', async (req, res) => {
   const conn = await db.getConnection();
   try {
-    const { producto_id, cantidad = 1, cliente, organizacion_slug, direccion_envio } = req.body;
+    const { producto_id, cantidad = 1, cliente, organizacion_slug, direccion_envio, codigo_descuento } = req.body;
 
     // Validación de presencia — nunca hay que confiar solo en el checkout
     // (public/checkout.html), que ya exige estos mismos campos con
@@ -72,6 +72,28 @@ router.post('/', async (req, res) => {
       });
     }
 
+    // 1.6. Código de descuento (opcional). Se re-valida acá con las mismas
+    // reglas que POST /api/codigos-descuento/validar — nunca hay que
+    // confiar en que el checkout ya lo validó antes de llegar acá, alguien
+    // podría llamar esta API directo. Un código ausente/inexistente/
+    // inactivo, o un producto que no acepta códigos, o un desglose promo
+    // incompleto, simplemente hace que la compra siga con los valores
+    // normales de siempre — no bloquea la compra ni rompe nada (mismo
+    // criterio que ya usa el checkout: el código es un plus, no un
+    // requisito). FOR UPDATE por las dudas de dos compras casi
+    // simultáneas incrementando veces_usado más abajo.
+    let codigoDescuentoValido = null;
+    if (codigo_descuento) {
+      const codigoNormalizado = String(codigo_descuento).trim().toUpperCase();
+      const [codigos] = await conn.query(
+        'SELECT * FROM codigos_descuento WHERE codigo = ? AND activo = 1 FOR UPDATE',
+        [codigoNormalizado]
+      );
+      if (codigos.length && producto.acepta_codigo_descuento && producto.precio_final_promo != null) {
+        codigoDescuentoValido = codigos[0];
+      }
+    }
+
     // 2. Resolver organización a partir del link (si existe)
     let organizacionId = null;
     if (organizacion_slug) {
@@ -104,12 +126,17 @@ router.post('/', async (req, res) => {
     // componentes del desglose de precio, ver schema.sql/productos —
     // monto_impuesto solo se congela si el producto lo cobra aparte;
     // si impuesto_incluido es true, ya está adentro de precio_proveedor
-    // y acá queda en 0 para no sumarlo dos veces).
-    const montoProveedor = producto.precio_proveedor * cantidad;
-    const montoComisionAfiliado = producto.comision_afiliado * cantidad;
-    const montoComisionHuayca = producto.comision_huayca * cantidad;
-    const montoComisionEliss = producto.comision_eliss * cantidad;
-    const montoImpuesto = producto.impuesto_incluido ? 0 : producto.monto_impuesto * cantidad;
+    // y acá queda en 0 para no sumarlo dos veces). Si hay un código de
+    // descuento válido para este producto, se usa el desglose _promo
+    // ENTERO en vez del normal — nunca se mezclan campos de los dos.
+    const usaPromo = !!codigoDescuentoValido;
+    const montoProveedor = (usaPromo ? producto.precio_proveedor_promo : producto.precio_proveedor) * cantidad;
+    const montoComisionAfiliado = (usaPromo ? producto.comision_afiliado_promo : producto.comision_afiliado) * cantidad;
+    const montoComisionHuayca = (usaPromo ? producto.comision_huayca_promo : producto.comision_huayca) * cantidad;
+    const montoComisionEliss = (usaPromo ? producto.comision_eliss_promo : producto.comision_eliss) * cantidad;
+    const impuestoIncluidoEfectivo = usaPromo ? producto.impuesto_incluido_promo : producto.impuesto_incluido;
+    const montoImpuestoUnitario = usaPromo ? producto.monto_impuesto_promo : producto.monto_impuesto;
+    const montoImpuesto = impuestoIncluidoEfectivo ? 0 : montoImpuestoUnitario * cantidad;
     const montoTotal = montoProveedor + montoComisionAfiliado + montoComisionHuayca + montoComisionEliss + montoImpuesto;
 
     // 5. Crear pedido
@@ -117,13 +144,13 @@ router.post('/', async (req, res) => {
       `INSERT INTO pedidos
        (codigo, cliente_id, producto_id, proveedor_id, organizacion_id,
         monto_proveedor, monto_comision_afiliado, monto_comision_huayca, monto_comision_eliss,
-        monto_impuesto, monto_total,
+        monto_impuesto, monto_total, codigo_descuento_usado,
         cantidad, direccion_envio, estado_liquidacion)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         'TEMP', clienteId, producto.id, producto.proveedor_id, organizacionId,
         montoProveedor, montoComisionAfiliado, montoComisionHuayca, montoComisionEliss,
-        montoImpuesto, montoTotal,
+        montoImpuesto, montoTotal, codigoDescuentoValido ? codigoDescuentoValido.codigo : null,
         cantidad, JSON.stringify(direccion_envio || null),
         organizacionId ? 'pendiente' : 'no_aplica'
       ]
@@ -131,6 +158,17 @@ router.post('/', async (req, res) => {
     const pedidoId = resultPedido.insertId;
     const codigo = generarCodigoPedido(pedidoId);
     await conn.query('UPDATE pedidos SET codigo = ? WHERE id = ?', [codigo, pedidoId]);
+
+    // 5.5. veces_usado es puramente informativo (no bloquea nada) — se
+    // cuenta apenas el pedido se crea, sin esperar a que el pago se
+    // apruebe, para mantenerlo simple (un código "usado" es uno con el que
+    // alguien completó un checkout, se haya terminado pagando o no).
+    if (codigoDescuentoValido) {
+      await conn.query(
+        'UPDATE codigos_descuento SET veces_usado = veces_usado + 1 WHERE id = ?',
+        [codigoDescuentoValido.id]
+      );
+    }
 
     // 6. Descontar stock (reserva optimista mientras se concreta el pago;
     // si el pago termina rechazado/cancelado, el webhook devuelve el stock)
@@ -147,6 +185,7 @@ router.post('/', async (req, res) => {
       pedido_id: pedidoId,
       codigo,
       monto_total: montoTotal,
+      codigo_descuento_aplicado: codigoDescuentoValido ? codigoDescuentoValido.codigo : null,
       organizacion_atribuida: organizacionId ? organizacion_slug : null,
       siguiente_paso: 'POST /api/pagos/preferencia con { pedido_codigo: codigo } para obtener el link de pago de Mercado Pago'
     });

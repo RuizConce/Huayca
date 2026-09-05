@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Huayca — Códigos de descuento</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, 'Segoe UI', sans-serif; margin: 0; background: #f4f5f2; color: #1a1a1a; }
+  header { background: #0d2b4e; color: white; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  header h1 { font-size: 18px; margin: 0; }
+  header .der { display: flex; align-items: center; gap: 10px; }
+  header a.volver { color: #ffffffcc; font-size: 13px; }
+  header button { background: transparent; border: 1px solid #ffffff55; color: white; padding: 6px 12px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+  main { max-width: 720px; margin: 0 auto; padding: 20px; }
+  .hidden { display: none !important; }
+
+  .seccion-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 18px; }
+  .seccion-card h2 { margin: 0 0 4px; color: #0d2b4e; font-size: 16px; }
+  .seccion-card .desc { color: #888; font-size: 12.5px; margin: 0 0 14px; }
+
+  .form-crear { display: flex; gap: 10px; }
+  .form-crear input { flex: 1; padding: 10px 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; text-transform: uppercase; }
+  .btn-primary { background: #e8801e; color: white; border: none; padding: 10px 18px; border-radius: 6px; font-size: 13.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+  .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 10px 8px; font-size: 13.5px; border-bottom: 1px solid #f0efe9; }
+  th { color: #999; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.02em; }
+  td.codigo { font-family: monospace; font-weight: 700; color: #0d2b4e; letter-spacing: 0.02em; }
+  td.num { text-align: right; }
+
+  .estado-badge { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 10px; white-space: nowrap; }
+  .estado-badge.activo { background: #e7f5ec; color: #1e8e3e; }
+  .estado-badge.inactivo { background: #f4f5f2; color: #999; }
+
+  .btn-toggle { border: 1px solid #ccc; background: white; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .btn-toggle.desactivar { color: #c0392b; border-color: #f5c6c1; }
+  .btn-toggle.activar { color: #1e8e3e; border-color: #c9e8d5; }
+
+  .estado-vacio { text-align: center; padding: 40px 20px; color: #999; font-size: 14px; }
+  #estadoCarga { text-align: center; padding: 60px 20px; color: #888; }
+  #errorBanner { background: #fdeeee; color: #c0392b; padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <a href="admin.html" class="volver">← Volver al panel</a>
+    <h1 style="margin-top:4px;">🎟️ Códigos de descuento</h1>
+  </div>
+  <div class="der">
+    <button onclick="cerrarSesion()">Cerrar sesión</button>
+  </div>
+</header>
+
+<main>
+  <div id="estadoCarga">Cargando códigos…</div>
+
+  <div id="app" class="hidden">
+    <div id="errorBanner" class="hidden"></div>
+
+    <div class="seccion-card">
+      <h2>Crear código nuevo</h2>
+      <p class="desc">Genérico: sirve para cualquier producto que tenga habilitada la opción "Acepta código de descuento" — no se elige un producto acá. Sin límite de cantidad ni de usos.</p>
+      <div class="form-crear">
+        <input id="nuevoCodigoTexto" placeholder="Ej: VERANO2026" maxlength="50" onkeydown="if(event.key==='Enter') crearCodigo()">
+        <button class="btn-primary" id="btnCrearCodigo" onclick="crearCodigo()">Crear código</button>
+      </div>
+    </div>
+
+    <div class="seccion-card">
+      <h2>Códigos existentes</h2>
+      <table>
+        <thead><tr><th>Código</th><th>Estado</th><th style="text-align:right;">Veces usado</th><th></th></tr></thead>
+        <tbody id="tablaCodigos"></tbody>
+      </table>
+      <div class="estado-vacio hidden" id="vacioCodigos">Todavía no creaste ningún código.</div>
+    </div>
+  </div>
+</main>
+
+<script>
+const BASE_URL = window.location.origin;
+// Modo "embed": ver el comentario equivalente en admin-organizaciones.html.
+const EMBED = new URLSearchParams(window.location.search).get('embed') === '1';
+if (!EMBED) { window.location.replace('admin-panel.html?tab=codigos'); }
+if (EMBED) { const h = document.querySelector('header'); if (h) h.style.display = 'none'; }
+function volverAlPanel() {
+  if (EMBED) { parent.postMessage({ type: 'huayca-logout' }, '*'); return; }
+  window.location.href = 'admin.html';
+}
+const token = localStorage.getItem('huayca_admin_token') || '';
+if (!token) volverAlPanel();
+
+function cerrarSesion() {
+  localStorage.removeItem('huayca_admin_token');
+  volverAlPanel();
+}
+
+function authHeaders() {
+  return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
+}
+
+async function apiFetch(path, options = {}) {
+  const res = await fetch(BASE_URL + path, { ...options, headers: { ...authHeaders(), ...(options.headers || {}) } });
+  if (res.status === 401 || res.status === 403) {
+    cerrarSesion();
+    throw new Error('Sesión expirada, inicia sesión de nuevo');
+  }
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Error en la petición');
+  return data;
+}
+
+function mostrarError(msg) {
+  const banner = document.getElementById('errorBanner');
+  banner.textContent = msg;
+  banner.classList.remove('hidden');
+  setTimeout(() => banner.classList.add('hidden'), 5000);
+}
+
+function formatoFecha(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+async function cargar() {
+  try {
+    const codigos = await apiFetch('/api/admin/codigos-descuento');
+    render(codigos);
+    document.getElementById('estadoCarga').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+  } catch (e) {
+    document.getElementById('estadoCarga').textContent = 'Error al cargar: ' + e.message;
+  }
+}
+
+function render(codigos) {
+  const tbody = document.getElementById('tablaCodigos');
+  if (!codigos.length) {
+    tbody.innerHTML = '';
+    document.getElementById('vacioCodigos').classList.remove('hidden');
+    return;
+  }
+  document.getElementById('vacioCodigos').classList.add('hidden');
+  tbody.innerHTML = codigos.map((c) => `
+    <tr>
+      <td class="codigo">${c.codigo}</td>
+      <td><span class="estado-badge ${c.activo ? 'activo' : 'inactivo'}">${c.activo ? 'Activo' : 'Inactivo'}</span></td>
+      <td class="num">${c.veces_usado}</td>
+      <td><button class="btn-toggle ${c.activo ? 'desactivar' : 'activar'}" onclick="toggleActivo(${c.id}, ${!c.activo})">${c.activo ? 'Desactivar' : 'Activar'}</button></td>
+    </tr>
+  `).join('');
+}
+
+async function crearCodigo() {
+  const input = document.getElementById('nuevoCodigoTexto');
+  const btn = document.getElementById('btnCrearCodigo');
+  const codigo = input.value.trim();
+  if (!codigo) { mostrarError('Escribí el texto del código'); return; }
+  btn.disabled = true;
+  try {
+    await apiFetch('/api/admin/codigos-descuento', { method: 'POST', body: JSON.stringify({ codigo }) });
+    input.value = '';
+    cargar();
+  } catch (e) {
+    mostrarError(e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function toggleActivo(id, nuevoValor) {
+  try {
+    await apiFetch(`/api/admin/codigos-descuento/${id}`, { method: 'PATCH', body: JSON.stringify({ activo: nuevoValor }) });
+    cargar();
+  } catch (e) {
+    mostrarError(e.message);
+  }
+}
+
+cargar();
+</script>
+
+</body>
+</html>
